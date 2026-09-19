@@ -6,22 +6,22 @@ type Props = {
 
 export default function GameCard({ game }: Props) {
     const hours = game.playtime_forever / 60;
+
+    const imageUrl = `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`;
   
     const iconUrl = game.img_icon_url
       ? `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`
       : null;
   
     return (
-      <div className="flex items-center gap-4 rounded-lg border p-4">
-        {iconUrl && (
-          <img
-            src={iconUrl}
-            alt={game.name}
-            className="h-12 w-12 rounded object-cover"
-          />
-        )}
+        <div className="overflow-hidden rounded-lg border">
+        <img
+          src={imageUrl}
+          alt={game.name}
+          className="h-auto w-full object-cover"
+        />
   
-        <div>
+        <div className="p-4">
           <h2 className="font-medium">
             {game.name}
           </h2>

@@ -1,9 +1,14 @@
 import { getOwnedGames } from "@/lib/steam";
 import GameCard from "@/components/GameCard";
+import GameLibrary from "@/components/GameLibrary";
 
 export default async function Home() {
   const games = await getOwnedGames();
-  
+
+  const sortedGames = [...games].sort(
+    (a, b) => b.playtime_forever - a.playtime_forever
+  );
+
   return (
     <main className="min-h-screen p-8">
       <h1 className="text-3xl font-bold">
@@ -14,23 +19,7 @@ export default async function Home() {
         Your Steam library
       </p>
 
-      <p className="mt-4 text-sm text-gray-400">
-        {games.length} games found
-      </p>
-
-      <section className="mt-8">
-        <div className="space-y-3">
-          {games.map((game) => (
-            <GameCard
-              key={game.appid}
-              game={game}
-            />
-          ))}
-        </div>
-      </section>
+      <GameLibrary games={sortedGames} />
     </main>
   );
-
-
-
 }
