@@ -1,9 +1,15 @@
-import { getOwnedGames } from "@/lib/steam";
+import { getOwnedGames, getRecentlyPlayedGames } from "@/lib/steam";
 import GameCard from "@/components/GameCard";
 import GameLibrary from "@/components/GameLibrary";
+import GameSuggestion from "@/components/GameSuggestion";
+import RecentlyPlayed from "@/components/RecentlyPlayed";
+
 
 export default async function Home() {
-  const games = await getOwnedGames();
+  const [games, recentGames] = await Promise.all([
+    getOwnedGames(),
+    getRecentlyPlayedGames(),
+  ]);
 
   const sortedGames = [...games].sort(
     (a, b) => b.playtime_forever - a.playtime_forever
@@ -18,6 +24,10 @@ export default async function Home() {
       <p className="mt-2 text-gray-500">
         Your Steam library
       </p>
+
+      <GameSuggestion games={sortedGames} />
+
+      <RecentlyPlayed games={recentGames} />
 
       <GameLibrary games={sortedGames} />
     </main>

@@ -3,6 +3,8 @@ export type SteamGame = {
     name: string;
     playtime_forever: number;
     img_icon_url: string;
+
+    playtime_2weeks?: number;
 };
 
 type SteamLibraryResponse = {
@@ -11,6 +13,39 @@ type SteamLibraryResponse = {
         games: SteamGame[];
     };
 };
+
+type RecentlyPlayedResponse = {
+    response: {
+        total_count: number;
+        games: SteamGame[];
+    };
+};
+
+export async function getRecentlyPlayedGames(): Promise<SteamGame[]> {
+    const apiKey = process.env.STEAM_API_KEY;
+    const steamId = process.env.STEAM_ID;
+
+    if(!apiKey){
+        throw new Error("Steam environment variables are missing");
+    }
+
+    const url = `https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1/` +
+    `?key=${apiKey}` +
+    `&steamid=${steamId}` +
+    `&count=0`;
+
+    const response = await fetch(url, {
+        cache: "no-store",
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch recently played games");
+    }
+
+    const data: RecentlyPlayedResponse = await response.json();
+
+    return data.response.games ?? [];
+}
 
 export async function getOwnedGames(): Promise<SteamGame[]> {
     const apiKey = process.env.STEAM_API_KEY;
