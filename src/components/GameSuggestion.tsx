@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { SteamGame } from "@/lib/steam";
+import GameImage from "@/components/GameImage";
 
 import {
   RecommendationCategory,
@@ -40,10 +41,6 @@ export default function GameSuggestion({
 
     setSuggestedGame(game);
   }
-
-  const imageUrl = suggestedGame
-    ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${suggestedGame.appid}/header.jpg`
-    : null;
 
   return (
     <section className="mt-8 rounded-xl border p-6">
@@ -95,13 +92,12 @@ export default function GameSuggestion({
 
       {suggestedGame && (
         <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={suggestedGame.name}
-              className="w-full object-cover"
-            />
-          )}
+          <GameImage
+            appid={suggestedGame.appid}
+            name={suggestedGame.name}
+            iconHash={suggestedGame.img_icon_url}
+            className="h-64 w-full object-cover"
+          />
 
           <div className="p-5">
             <p className="text-sm text-gray-500">
