@@ -12,7 +12,8 @@ export default async function Home() {
   ]);
 
   const sortedGames = [...games].sort(
-    (a, b) => b.playtime_forever - a.playtime_forever
+    (a, b) =>
+      b.playtime_forever - a.playtime_forever
   );
 
   return (
@@ -21,11 +22,10 @@ export default async function Home() {
         Game Backlog
       </h1>
 
-      <p className="mt-2 text-gray-500">
-        Your Steam library
-      </p>
-
-      <GameSuggestion games={sortedGames} />
+      <GameSuggestion
+        games={sortedGames}
+        recentGames={recentGames}
+      />
 
       <RecentlyPlayed games={recentGames} />
 

@@ -1,61 +1,60 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { SteamGame } from "@/lib/steam";
 
+import {
+  RecommendationCategory,
+  getGamesByCategory,
+  getRandomGame,
+} from "@/lib/recommendations";
+
 type Props = {
-    games: SteamGame[];
+  games: SteamGame[];
+  recentGames: SteamGame[];
 };
 
-type SuggestionFilter = "unplayed" | "under2" | "all";
+export default function GameSuggestion({
+  games,
+  recentGames,
+}: Props) {
+  const [category, setCategory] =
+    useState<RecommendationCategory>("unplayed");
 
-export default function GameSuggestion({ games }: Props) {
-    const [filter, setFilter] = useState<SuggestionFilter>("unplayed");
-    const [suggestedGame, setSuggestedGame] = useState<SteamGame | null>(null);
+  const [suggestedGame, setSuggestedGame] =
+    useState<SteamGame | null>(null);
 
-    const eligibleGames = useMemo(() => {
-        if (filter === "unplayed") {
-            return games.filter((game) => game.playtime_forever === 0);
-        } 
-        else if (filter === "under2") {
-            return games.filter(
-                (game) => game.playtime_forever > 0 && game.playtime_forever < 120);
-        }
+  const eligibleGames = useMemo(() => {
+    return getGamesByCategory(
+      category,
+      games,
+      recentGames
+    );
+  }, [category, games, recentGames]);
 
-        return games;
+  function suggestGame() {
+    const game = getRandomGame(
+      eligibleGames,
+      suggestedGame
+    );
 
-    }, [games, filter]);
+    setSuggestedGame(game);
+  }
 
-    function suggestGame() {
-        if (eligibleGames.length === 0) {
-            setSuggestedGame(null);
-            return;
-        }
+  const imageUrl = suggestedGame
+    ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${suggestedGame.appid}/header.jpg`
+    : null;
 
-        let availableGames = eligibleGames;
-
-        if (suggestedGame && eligibleGames.length > 1) {
-        availableGames = eligibleGames.filter(
-            (game) => game.appid !== suggestedGame.appid
-        );
-        }
-
-        const randomIndex = Math.floor(
-        Math.random() * availableGames.length
-        );
-
-        setSuggestedGame(availableGames[randomIndex]);
-    }
-
-    const imageUrl = suggestedGame ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${suggestedGame.appid}/header.jpg` : null;
-
-    return (
-        <section className="mt-8 rounded-xl border p-6">
+  return (
+    <section className="mt-8 rounded-xl border p-6">
       <div className="flex flex-wrap items-center gap-3">
         <select
-          value={filter}
+          value={category}
           onChange={(e) => {
-            setFilter(e.target.value as SuggestionFilter);
+            setCategory(
+              e.target.value as RecommendationCategory
+            );
+
             setSuggestedGame(null);
           }}
           className="rounded-lg border px-3 py-2"
@@ -64,8 +63,16 @@ export default function GameSuggestion({ games }: Props) {
             Unplayed
           </option>
 
-          <option value="under2">
-            Under 2 Hours
+          <option value="barelyPlayed">
+            Barely Played
+          </option>
+
+          <option value="forgotten">
+            Forgotten Games
+          </option>
+
+          <option value="recentlyPlayed">
+            Recently Played
           </option>
 
           <option value="all">
@@ -75,11 +82,16 @@ export default function GameSuggestion({ games }: Props) {
 
         <button
           onClick={suggestGame}
-          className="rounded-lg bg-black px-5 py-2 text-white"
+          disabled={eligibleGames.length === 0}
+          className="rounded-lg bg-black px-5 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Suggest a Game
         </button>
       </div>
+
+      <p className="mt-3 text-sm text-gray-500">
+        {eligibleGames.length} eligible games
+      </p>
 
       {suggestedGame && (
         <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
