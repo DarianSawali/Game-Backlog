@@ -94,3 +94,26 @@ export function getRandomGame(
   
     return availableGames[randomIndex];
   }
+
+  export function getRecommendationReason(
+    category: RecommendationCategory,
+    game: SteamGame
+  ) {
+    switch (category) {
+      case "unplayed":
+        return "You haven't played this game yet.";
+
+      case "barelyPlayed":
+        return `You've only played this for ${(game.playtime_forever / 60).toFixed(1)} hours.`;
+
+      case "forgotten":
+        return "You've played this before, but not recently.";
+
+      case "recentlyPlayed":
+        return "You've been playing this recently.";
+
+      case "all":
+      default:
+        return "Randomly selected from your Steam library.";
+    }
+  }

@@ -8,6 +8,7 @@ import {
   RecommendationCategory,
   getGamesByCategory,
   getRandomGame,
+  getRecommendationReason,
 } from "@/lib/recommendations";
 
 type Props = {
@@ -91,40 +92,53 @@ export default function GameSuggestion({
       </p>
 
       {suggestedGame && (
-        <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
-          <GameImage
-            appid={suggestedGame.appid}
-            name={suggestedGame.name}
-            iconHash={suggestedGame.img_icon_url}
-            className="h-64 w-full object-cover"
-          />
+  <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
+    <GameImage
+      appid={suggestedGame.appid}
+      name={suggestedGame.name}
+      iconHash={suggestedGame.img_icon_url}
+    />
 
-          <div className="p-5">
-            <p className="text-sm text-gray-500">
-              You should play
-            </p>
+    <div className="p-5">
+      <p className="text-sm text-gray-500">
+        You should play
+      </p>
 
-            <h2 className="mt-1 text-2xl font-bold">
-              {suggestedGame.name}
-            </h2>
+      <h2 className="mt-1 text-2xl font-bold">
+        {suggestedGame.name}
+      </h2>
 
-            <p className="mt-2 text-sm text-gray-500">
-              {suggestedGame.playtime_forever === 0
-                ? "You haven't played this yet."
-                : `${(
-                    suggestedGame.playtime_forever / 60
-                  ).toFixed(1)} hours played`}
-            </p>
+      <p className="mt-2 text-sm text-gray-500">
+        {getRecommendationReason(category, suggestedGame)}
+      </p>
 
-            <button
-              onClick={suggestGame}
-              className="mt-4 rounded-lg border px-4 py-2"
-            >
-              Try Another
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="mt-5 flex flex-wrap gap-3">
+        <a
+          href={`https://store.steampowered.com/app/${suggestedGame.appid}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg bg-black px-4 py-2 text-white"
+        >
+          View on Steam
+        </a>
+
+        <a
+          href={`steam://run/${suggestedGame.appid}`}
+          className="rounded-lg border px-4 py-2"
+        >
+          Launch Game
+        </a>
+
+        <button
+          onClick={suggestGame}
+          className="rounded-lg border px-4 py-2"
+        >
+          Try Another
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </section>
   );
 }
