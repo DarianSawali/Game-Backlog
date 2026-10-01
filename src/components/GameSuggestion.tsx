@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { SteamGame, SteamGameMetadata } from "@/lib/steam";
+import { FriendGameActivity } from "@/lib/friends";
 
 import GameImage from "@/components/GameImage";
 
@@ -19,11 +20,13 @@ import {
 type Props = {
   games: SteamGame[];
   recentGames: SteamGame[];
+  friendActivity: FriendGameActivity[];
 };
 
 export default function GameSuggestion({
   games,
   recentGames,
+  friendActivity,
 }: Props) {
   const [category, setCategory] =
     useState<RecommendationCategory>("unplayed");
@@ -43,13 +46,34 @@ export default function GameSuggestion({
   const [genreProfile, setGenreProfile] =
     useState<Map<string, number>>(new Map());
 
+  const friendActivityMap = useMemo(
+    () =>
+      new Map(
+        friendActivity.map((activity) => [
+          activity.appid,
+          activity.friendsPlaying,
+        ])
+      ),
+    [friendActivity]
+  );
+
+
+
   const eligibleGames = useMemo(() => {
     return getGamesByCategory(
       category,
       games,
-      recentGames
+      recentGames,
+      friendActivityMap
     );
-  }, [category, games, recentGames]);
+  }, [
+    category,
+    games,
+    recentGames,
+    friendActivityMap,
+  ]);
+
+
 
   // function suggestGame() {
   //   const game = getRandomGame(
@@ -59,6 +83,11 @@ export default function GameSuggestion({
 
   //   setSuggestedGame(game);
   // }
+
+  const suggestedGameFriendCount =
+    suggestedGame
+      ? friendActivityMap.get(suggestedGame.appid) ?? 0
+      : 0;
 
   async function suggestGame() {
     if (eligibleGames.length === 0) {
@@ -95,7 +124,8 @@ export default function GameSuggestion({
                 game,
                 metadata,
                 recentGameIds,
-                genreProfile
+                genreProfile,
+                friendActivityMap
               ),
             };
           } catch {
@@ -106,7 +136,8 @@ export default function GameSuggestion({
                 game,
                 null,
                 recentGameIds,
-                genreProfile
+                genreProfile,
+                friendActivityMap
               ),
             };
           }
@@ -201,6 +232,10 @@ export default function GameSuggestion({
             Recently Played
           </option>
 
+          <option value="friendsPlaying">
+            Friends Are Playing
+          </option>
+
           <option value="all">
             All Games
           </option>
@@ -225,108 +260,118 @@ export default function GameSuggestion({
       </p>
 
       {suggestedGame && (
-  <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
-    <GameImage
-      appid={suggestedGame.appid}
-      name={suggestedGame.name}
-      iconHash={suggestedGame.img_icon_url}
-    />
+        <div className="mt-6 max-w-xl overflow-hidden rounded-xl border">
+          <GameImage
+            appid={suggestedGame.appid}
+            name={suggestedGame.name}
+            iconHash={suggestedGame.img_icon_url}
+          />
 
-    <div className="p-5">
-      <p className="text-sm text-gray-500">
-        You should play
-      </p>
-
-      <h2 className="mt-1 text-2xl font-bold">
-        {suggestedGame.name}
-      </h2>
-
-      <p className="mt-2 text-sm text-gray-500">
-        {getRecommendationReason(category, suggestedGame)}
-      </p>
-
-      <p className="mt-1 text-sm text-gray-500">
-        {suggestedGame.playtime_forever === 0
-          ? "Unplayed"
-          : `${(
-              suggestedGame.playtime_forever / 60
-            ).toFixed(1)} hours played`}
-      </p>
-
-      {loadingMetadata && (
-        <p className="mt-3 text-sm text-gray-500">
-          Loading game details...
-        </p>
-      )}
-
-      {metadata && (
-        <div className="mt-4">
-          {metadata.genres &&
-            metadata.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {metadata.genres.map((genre) => (
-                  <span
-                    key={genre.id}
-                    className="rounded-full border px-3 py-1 text-xs"
-                  >
-                    {genre.description}
-                  </span>
-                ))}
-              </div>
-            )}
-
-          {metadata.shortDescription && (
-            <p className="mt-4 text-sm text-gray-500">
-              {metadata.shortDescription}
+          <div className="p-5">
+            <p className="text-sm text-gray-500">
+              You should play
             </p>
-          )}
 
-          {metadata.developers &&
-            metadata.developers.length > 0 && (
-              <p className="mt-3 text-sm text-gray-500">
-                Developer:{" "}
-                {metadata.developers.join(", ")}
+            <h2 className="mt-1 text-2xl font-bold">
+              {suggestedGame.name}
+            </h2>
+
+            <p className="mt-2 text-sm text-gray-500">
+              {getRecommendationReason(category, suggestedGame)}
+            </p>
+
+            {suggestedGameFriendCount > 0 && (
+              <p className="mt-1 text-sm text-gray-500">
+                {suggestedGameFriendCount}{" "}
+                {suggestedGameFriendCount === 1
+                  ? "friend has"
+                  : "friends have"}{" "}
+                played this recently.
               </p>
             )}
 
-          {metadata.releaseDate && (
             <p className="mt-1 text-sm text-gray-500">
-              Released: {metadata.releaseDate}
+              {suggestedGame.playtime_forever === 0
+                ? "Unplayed"
+                : `${(
+                  suggestedGame.playtime_forever / 60
+                ).toFixed(1)} hours played`}
             </p>
-          )}
+
+            {loadingMetadata && (
+              <p className="mt-3 text-sm text-gray-500">
+                Loading game details...
+              </p>
+            )}
+
+            {metadata && (
+              <div className="mt-4">
+                {metadata.genres &&
+                  metadata.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {metadata.genres.map((genre) => (
+                        <span
+                          key={genre.id}
+                          className="rounded-full border px-3 py-1 text-xs"
+                        >
+                          {genre.description}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                {metadata.shortDescription && (
+                  <p className="mt-4 text-sm text-gray-500">
+                    {metadata.shortDescription}
+                  </p>
+                )}
+
+                {metadata.developers &&
+                  metadata.developers.length > 0 && (
+                    <p className="mt-3 text-sm text-gray-500">
+                      Developer:{" "}
+                      {metadata.developers.join(", ")}
+                    </p>
+                  )}
+
+                {metadata.releaseDate && (
+                  <p className="mt-1 text-sm text-gray-500">
+                    Released: {metadata.releaseDate}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <a
+                href={`https://store.steampowered.com/app/${suggestedGame.appid}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-black px-4 py-2 text-white"
+              >
+                View on Steam
+              </a>
+
+              <a
+                href={`steam://run/${suggestedGame.appid}`}
+                className="rounded-lg border px-4 py-2"
+              >
+                Launch Game
+              </a>
+
+              <button
+                onClick={suggestGame}
+                disabled={isRecommending}
+                className="rounded-lg border px-4 py-2 disabled:opacity-50"
+              >
+                {isRecommending
+                  ? "Finding..."
+                  : "Try Another"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
-      <div className="mt-5 flex flex-wrap gap-3">
-        <a
-          href={`https://store.steampowered.com/app/${suggestedGame.appid}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-lg bg-black px-4 py-2 text-white"
-        >
-          View on Steam
-        </a>
-
-        <a
-          href={`steam://run/${suggestedGame.appid}`}
-          className="rounded-lg border px-4 py-2"
-        >
-          Launch Game
-        </a>
-
-        <button
-          onClick={suggestGame}
-          disabled={isRecommending}
-          className="rounded-lg border px-4 py-2 disabled:opacity-50"
-        >
-          {isRecommending
-            ? "Finding..."
-            : "Try Another"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
     </section>
   );
 }

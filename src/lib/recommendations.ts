@@ -10,11 +10,12 @@ export type EnrichedGame = {
 };
 
 export type RecommendationCategory =
-| "unplayed"
-| "barelyPlayed"
-| "forgotten"
-| "recentlyPlayed"
-| "all";
+  | "unplayed"
+  | "barelyPlayed"
+  | "forgotten"
+  | "recentlyPlayed"
+  | "friendsPlaying"
+  | "all";
 
 export function getUnplayedGames(games: SteamGame[]) {
     return games.filter(game => game.playtime_forever === 0);
@@ -59,28 +60,38 @@ export function getRecentlyPlayedGames(
 }
 
 export function getGamesByCategory(
-    category: RecommendationCategory,
-    games: SteamGame[],
-    recentGames: SteamGame[]
-  ) {
-    switch (category) {
-      case "unplayed":
-        return getUnplayedGames(games);
+  category: RecommendationCategory,
+  games: SteamGame[],
+  recentGames: SteamGame[],
+  friendActivityMap?: Map<number, number>
+) {
+  switch (category) {
+    case "unplayed":
+      return getUnplayedGames(games);
 
-      case "barelyPlayed":
-        return getBarelyPlayedGames(games);
+    case "barelyPlayed":
+      return getBarelyPlayedGames(games);
 
-      case "forgotten":
-        return getForgottenGames(games, recentGames);
+    case "forgotten":
+      return getForgottenGames(games, recentGames);
 
-      case "recentlyPlayed":
-        return getRecentlyPlayedGames(games, recentGames);
+    case "recentlyPlayed":
+      return getRecentlyPlayedGames(
+        games,
+        recentGames
+      );
 
-      case "all":
-      default:
-        return games;
-    }
+    case "friendsPlaying":
+      return games.filter(
+        (game) =>
+          (friendActivityMap?.get(game.appid) ?? 0) > 0
+      );
+
+    case "all":
+    default:
+      return games;
   }
+}
 
 
 export function getRandomGame(
@@ -133,14 +144,17 @@ export function getRandomGame(
     game: SteamGame,
     metadata: SteamGameMetadata | null,
     recentGameIds: Set<number>,
-    genreProfile: Map<string, number>
+    genreProfile: Map<string, number>,
+    friendActivityMap: Map<number, number>
   ) {
     let score = 0;
 
+    // Unplayed
     if (game.playtime_forever === 0) {
       score += 30;
     }
 
+    // Barely played
     if (
       game.playtime_forever > 0 &&
       game.playtime_forever < 120
@@ -148,6 +162,7 @@ export function getRandomGame(
       score += 20;
     }
 
+    // Played before, but not recently
     if (
       game.playtime_forever >= 120 &&
       !recentGameIds.has(game.appid)
@@ -155,10 +170,12 @@ export function getRandomGame(
       score += 10;
     }
 
+    // Prefer actual games over DLC/software/etc.
     if (metadata?.type === "game") {
       score += 15;
     }
 
+    // Genre preference bonus
     for (const genre of metadata?.genres ?? []) {
       const genreWeight =
         genreProfile.get(genre.description) ?? 0;
@@ -166,8 +183,15 @@ export function getRandomGame(
       score += genreWeight * 5;
     }
 
+    // Friend activity bonus
+    const friendsPlaying =
+      friendActivityMap.get(game.appid) ?? 0;
+
+    score += friendsPlaying * 10;
+
     return score;
   }
+
 
   export function getCandidateGames(
     games: SteamGame[],
