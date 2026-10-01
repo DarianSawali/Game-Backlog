@@ -73,13 +73,13 @@ export async function getOwnedGames(): Promise<SteamGame[]> {
 
     if (!response.ok) {
         const errorText = await response.text();
-      
+
         console.error("Steam API error:", {
           status: response.status,
           statusText: response.statusText,
           body: errorText,
         });
-      
+
         throw new Error(
           `Steam API failed: ${response.status} ${response.statusText}`
         );
@@ -89,5 +89,118 @@ export async function getOwnedGames(): Promise<SteamGame[]> {
     return data.response.games ?? [];
 
 }
+
+export type SteamGameMetadata = {
+    appid: number;
+    name: string;
+    type: string;
+    shortDescription?: string;
+    headerImage?: string;
+    capsuleImage?: string;
+    developers?: string[];
+    publishers?: string[];
+    genres?: {
+      id: string;
+      description: string;
+    }[];
+    categories?: {
+      id: number;
+      description: string;
+    }[];
+    releaseDate?: string;
+    controllerSupport?: string;
+  };
+
+  type SteamStoreResponse = {
+    success: boolean;
+    data?: {
+      type?: string;
+      name?: string;
+      short_description?: string;
+      header_image?: string;
+      capsule_image?: string;
+      developers?: string[];
+      publishers?: string[];
+      genres?: {
+        id: string;
+        description: string;
+      }[];
+      categories?: {
+        id: number;
+        description: string;
+      }[];
+      release_date?: {
+        coming_soon: boolean;
+        date: string;
+      };
+      controller_support?: string;
+    };
+  };
+
+  export async function getGameMetadata(
+    appid: number
+  ): Promise<SteamGameMetadata | null> {
+    const url =
+      `https://store.steampowered.com/api/appdetails` +
+      `?appids=${appid}` +
+      `&l=english`;
+
+    const response = await fetch(url, {
+      next: {
+        revalidate: 86400,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(
+        `Failed to fetch metadata for Steam app ${appid}`
+      );
+
+      return null;
+    }
+
+    const result = await response.json();
+
+    const app = result[String(appid)] as
+      | SteamStoreResponse
+      | undefined;
+
+    if (!app?.success || !app.data) {
+      return null;
+    }
+
+    return {
+      appid,
+      name: app.data.name ?? "Unknown Game",
+      type: app.data.type ?? "unknown",
+
+      shortDescription:
+        app.data.short_description,
+
+      headerImage:
+        app.data.header_image,
+
+      capsuleImage:
+        app.data.capsule_image,
+
+      developers:
+        app.data.developers,
+
+      publishers:
+        app.data.publishers,
+
+      genres:
+        app.data.genres,
+
+      categories:
+        app.data.categories,
+
+      releaseDate:
+        app.data.release_date?.date,
+
+      controllerSupport:
+        app.data.controller_support,
+    };
+  }
 
 
