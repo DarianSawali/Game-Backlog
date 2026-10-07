@@ -1,5 +1,8 @@
+"use client";
+
 import { SteamGame } from "@/lib/steam";
 import GameImage from "@/components/GameImage";
+import BacklogStatusSelect from "@/components/BacklogStatusSelect";
 
 type Props = {
   game: SteamGame;
@@ -34,6 +37,8 @@ export default function GameCard({ game }: Props) {
               {(game.playtime_2weeks / 60).toFixed(1)} hours recently
             </p>
           )}
+
+        <BacklogStatusSelect appid={game.appid} className="mt-3" />
       </div>
     </div>
   );

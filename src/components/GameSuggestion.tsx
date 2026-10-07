@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import GameImage from "@/components/GameImage";
+import BacklogStatusSelect from "@/components/BacklogStatusSelect";
 import { FriendGameActivity } from "@/lib/friends";
 import { getGameMetadataBatch } from "@/lib/game-metadata-client";
 import {
@@ -233,6 +234,11 @@ export default function GameSuggestion({
                     suggestedGame.playtime_forever / 60
                   ).toFixed(1)} hours played`}
             </p>
+
+            <BacklogStatusSelect
+              appid={suggestedGame.appid}
+              className="mt-4 max-w-48"
+            />
 
             {metadata && (
               <div className="mt-4">
