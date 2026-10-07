@@ -35,6 +35,8 @@ export default function GameSuggestion({
     useState<SteamGameMetadata | null>(null);
   const [scoreReasons, setScoreReasons] = useState<string[]>([]);
   const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendationError, setRecommendationError] =
+    useState<string | null>(null);
   const [genreProfile, setGenreProfile] =
     useState<Map<string, number>>(new Map());
   const recommendationRun = useRef(0);
@@ -71,6 +73,7 @@ export default function GameSuggestion({
     const run = recommendationRun.current + 1;
     recommendationRun.current = run;
     setIsRecommending(true);
+    setRecommendationError(null);
 
     try {
       const candidates = getCandidateGames(eligibleGames, 12);
@@ -108,6 +111,12 @@ export default function GameSuggestion({
       setSuggestedGame(recommendation.game);
       setMetadata(recommendation.metadata);
       setScoreReasons(recommendation.reasons);
+    } catch {
+      if (recommendationRun.current === run) {
+        setRecommendationError(
+          "A recommendation could not be prepared. Please try again."
+        );
+      }
     } finally {
       if (recommendationRun.current === run) {
         setIsRecommending(false);
@@ -148,6 +157,7 @@ export default function GameSuggestion({
     setMetadata(null);
     setScoreReasons([]);
     setIsRecommending(false);
+    setRecommendationError(null);
   }
 
   return (
@@ -186,6 +196,15 @@ export default function GameSuggestion({
       {eligibleGames.length === 0 && (
         <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
           No games are available in this category.
+        </p>
+      )}
+
+      {recommendationError && (
+        <p
+          className="mt-3 text-sm text-red-700 dark:text-red-300"
+          role="alert"
+        >
+          {recommendationError}
         </p>
       )}
 

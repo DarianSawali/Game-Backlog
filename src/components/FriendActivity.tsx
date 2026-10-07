@@ -16,7 +16,15 @@ export default function FriendActivity({
   );
 
   if (activity.length === 0) {
-    return null;
+    return (
+      <section className="mt-10 rounded-xl border border-dashed p-6">
+        <h2 className="text-xl font-semibold">Friends Are Playing</h2>
+        <p className="mt-2 text-sm text-gray-500">
+          No recent friend activity is available. Friend activity may be
+          private.
+        </p>
+      </section>
+    );
   }
 
   return (

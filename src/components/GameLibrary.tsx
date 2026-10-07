@@ -4,22 +4,19 @@ import { useMemo, useState } from "react";
 import GameCard from "@/components/GameCard";
 import {
   BACKLOG_STATUS_OPTIONS,
-  BacklogStatus,
   useBacklogStatuses,
 } from "@/lib/backlog";
+import {
+  filterAndSortGames,
+  LibrarySort,
+  PlaytimeFilter,
+  StatusFilter,
+} from "@/lib/library";
 import { SteamGame } from "@/lib/steam";
 
 type Props = {
   games: SteamGame[];
 };
-
-type PlaytimeFilter = "all" | "unplayed" | "under2";
-type StatusFilter = "all" | "untracked" | BacklogStatus;
-type SortOption =
-  | "playtimeDesc"
-  | "playtimeAsc"
-  | "recent"
-  | "nameAsc";
 
 const PAGE_SIZE = 24;
 
@@ -29,63 +26,20 @@ export default function GameLibrary({ games }: Props) {
     useState<PlaytimeFilter>("all");
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("all");
-  const [sort, setSort] = useState<SortOption>("playtimeDesc");
+  const [sort, setSort] = useState<LibrarySort>("playtimeDesc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { statuses } = useBacklogStatuses();
 
-  const filteredGames = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase();
-
-    return games
-      .filter((game) => {
-        if (
-          normalizedSearch &&
-          !game.name.toLocaleLowerCase().includes(normalizedSearch)
-        ) {
-          return false;
-        }
-
-        if (
-          playtimeFilter === "unplayed" &&
-          game.playtime_forever !== 0
-        ) {
-          return false;
-        }
-
-        if (
-          playtimeFilter === "under2" &&
-          (game.playtime_forever === 0 ||
-            game.playtime_forever >= 120)
-        ) {
-          return false;
-        }
-
-        const status = statuses[String(game.appid)];
-
-        if (statusFilter === "untracked") {
-          return !status;
-        }
-
-        if (statusFilter !== "all" && status !== statusFilter) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        switch (sort) {
-          case "playtimeAsc":
-            return a.playtime_forever - b.playtime_forever;
-          case "recent":
-            return (b.playtime_2weeks ?? 0) - (a.playtime_2weeks ?? 0);
-          case "nameAsc":
-            return a.name.localeCompare(b.name);
-          case "playtimeDesc":
-          default:
-            return b.playtime_forever - a.playtime_forever;
-        }
-      });
-  }, [games, playtimeFilter, search, sort, statusFilter, statuses]);
+  const filteredGames = useMemo(
+    () =>
+      filterAndSortGames(games, statuses, {
+        search,
+        playtimeFilter,
+        statusFilter,
+        sort,
+      }),
+    [games, playtimeFilter, search, sort, statusFilter, statuses]
+  );
 
   const visibleGames = filteredGames.slice(0, visibleCount);
   const unplayedCount = games.filter(
@@ -106,6 +60,18 @@ export default function GameLibrary({ games }: Props) {
     setStatusFilter("all");
     setSort("playtimeDesc");
     resetVisibleCount();
+  }
+
+  if (games.length === 0) {
+    return (
+      <section className="mt-12 rounded-xl border border-dashed p-8 text-center">
+        <h2 className="text-xl font-semibold">No library games found</h2>
+        <p className="mt-2 text-sm text-gray-500">
+          Your Steam library may be empty, private, or temporarily
+          unavailable.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -187,7 +153,7 @@ export default function GameLibrary({ games }: Props) {
           <select
             value={sort}
             onChange={(event) => {
-              setSort(event.target.value as SortOption);
+              setSort(event.target.value as LibrarySort);
               resetVisibleCount();
             }}
             className="w-full rounded-lg border bg-transparent px-3 py-2"

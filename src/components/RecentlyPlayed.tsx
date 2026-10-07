@@ -7,7 +7,14 @@ type Props = {
 
 export default function RecentlyPlayed({ games }: Props) {
     if (games.length === 0) {
-        return null;
+        return (
+          <section className="mt-10 rounded-xl border border-dashed p-6">
+            <h2 className="text-xl font-semibold">Recently Played</h2>
+            <p className="mt-2 text-sm text-gray-500">
+              No recent Steam activity is available.
+            </p>
+          </section>
+        );
       }
     
       return (
