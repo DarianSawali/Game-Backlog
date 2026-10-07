@@ -9,6 +9,7 @@ import RecentlyPlayed from "@/components/RecentlyPlayed";
 
 import { getFriendGameActivity } from "@/lib/friends";
 import FriendActivity from "@/components/FriendActivity";
+import BacklogDashboard from "@/components/BacklogDashboard";
 
 
 export default async function Home() {
@@ -70,6 +71,8 @@ export default async function Home() {
           </ul>
         </div>
       )}
+
+      <BacklogDashboard games={sortedGames} />
 
       <GameSuggestion
         games={sortedGames}

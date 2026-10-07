@@ -2,6 +2,10 @@ import {
   SteamGame,
   SteamGameMetadata,
 } from "@/lib/steam";
+import type {
+  BacklogPriority,
+  BacklogStatus,
+} from "@/lib/backlog";
 
 export type RecommendationCategory =
   | "unplayed"
@@ -9,6 +13,9 @@ export type RecommendationCategory =
   | "forgotten"
   | "recentlyPlayed"
   | "friendsPlaying"
+  | "wantToPlay"
+  | "playing"
+  | "paused"
   | "all";
 
 export type RecommendationScore = {
@@ -62,25 +69,37 @@ export function getGamesByCategory(
   category: RecommendationCategory,
   games: SteamGame[],
   recentGames: SteamGame[],
-  friendActivityMap?: Map<number, number>
+  friendActivityMap?: Map<number, number>,
+  statuses: Record<string, BacklogStatus> = {}
 ) {
+  const recommendableGames = games.filter((game) => {
+    const status = statuses[String(game.appid)];
+    return status !== "completed" && status !== "dropped";
+  });
+
   switch (category) {
     case "unplayed":
-      return getUnplayedGames(games);
+      return getUnplayedGames(recommendableGames);
     case "barelyPlayed":
-      return getBarelyPlayedGames(games);
+      return getBarelyPlayedGames(recommendableGames);
     case "forgotten":
-      return getForgottenGames(games, recentGames);
+      return getForgottenGames(recommendableGames, recentGames);
     case "recentlyPlayed":
-      return getRecentlyPlayedGames(games, recentGames);
+      return getRecentlyPlayedGames(recommendableGames, recentGames);
     case "friendsPlaying":
-      return games.filter(
+      return recommendableGames.filter(
         (game) =>
           (friendActivityMap?.get(game.appid) ?? 0) > 0
       );
+    case "wantToPlay":
+    case "playing":
+    case "paused":
+      return games.filter(
+        (game) => statuses[String(game.appid)] === category
+      );
     case "all":
     default:
-      return games;
+      return recommendableGames;
   }
 }
 
@@ -101,6 +120,12 @@ export function getRecommendationReason(
       return "You've been playing this recently.";
     case "friendsPlaying":
       return "Your friends have been playing this recently.";
+    case "wantToPlay":
+      return "You marked this as something you want to play.";
+    case "playing":
+      return "Continue a game that is already in progress.";
+    case "paused":
+      return "This could be a good time to resume a paused game.";
     case "all":
     default:
       return "Selected from your Steam library.";
@@ -112,10 +137,37 @@ export function scoreGameRecommendation(
   metadata: SteamGameMetadata | null,
   recentGameIds: Set<number>,
   genreProfile: Map<string, number>,
-  friendActivityMap: Map<number, number>
+  friendActivityMap: Map<number, number>,
+  statuses: Record<string, BacklogStatus> = {},
+  priorities: Record<string, BacklogPriority> = {}
 ): RecommendationScore {
   let score = 0;
   const reasons: string[] = [];
+  const status = statuses[String(game.appid)];
+  const priority = priorities[String(game.appid)];
+
+  if (status === "playing") {
+    score += 35;
+    reasons.push("It is already in progress.");
+  } else if (status === "wantToPlay") {
+    score += 25;
+    reasons.push("It is on your want-to-play list.");
+  } else if (status === "paused") {
+    score += 15;
+    reasons.push("It is ready to be resumed.");
+  }
+
+  if (priority) {
+    const priorityBonus = {
+      high: 20,
+      medium: 10,
+      low: 5,
+    }[priority];
+    score += priorityBonus;
+    reasons.push(`${
+      priority[0].toUpperCase() + priority.slice(1)
+    } backlog priority.`);
+  }
 
   if (game.playtime_forever === 0) {
     score += 30;

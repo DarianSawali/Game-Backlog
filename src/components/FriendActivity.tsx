@@ -1,4 +1,5 @@
 import GameImage from "@/components/GameImage";
+import BacklogControls from "@/components/BacklogControls";
 import { FriendGameActivity } from "@/lib/friends";
 import { SteamGame } from "@/lib/steam";
 
@@ -70,6 +71,10 @@ export default function FriendActivity({
                     ? "In your library"
                     : "Not in your library"}
                 </p>
+
+                {owned && (
+                  <BacklogControls appid={game.appid} className="mt-3" />
+                )}
               </div>
             </div>
           );

@@ -62,4 +62,35 @@ describe("scoreGameRecommendation", () => {
 
     expect(result).toEqual({ score: 0, reasons: [] });
   });
+
+  it("adds backlog status and priority to the score", () => {
+    const result = scoreGameRecommendation(
+      game,
+      null,
+      new Set(),
+      new Map(),
+      new Map(),
+      { [game.appid]: "wantToPlay" },
+      { [game.appid]: "high" }
+    );
+
+    expect(result.score).toBe(75);
+    expect(result.reasons).toContain(
+      "It is on your want-to-play list."
+    );
+    expect(result.reasons).toContain("High backlog priority.");
+  });
+
+  it("excludes completed and dropped games from general categories", () => {
+    const droppedGame = { ...game, appid: 12 };
+    const result = getGamesByCategory(
+      "all",
+      [game, droppedGame],
+      [],
+      new Map(),
+      { "10": "completed", "12": "dropped" }
+    );
+
+    expect(result).toEqual([]);
+  });
 });

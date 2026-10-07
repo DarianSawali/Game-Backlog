@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import GameImage from "@/components/GameImage";
-import BacklogStatusSelect from "@/components/BacklogStatusSelect";
+import BacklogControls from "@/components/BacklogControls";
 import { FriendGameActivity } from "@/lib/friends";
 import { getGameMetadataBatch } from "@/lib/game-metadata-client";
 import {
@@ -15,6 +15,10 @@ import {
   scoreGameRecommendation,
 } from "@/lib/recommendations";
 import { SteamGame, SteamGameMetadata } from "@/lib/steam";
+import {
+  useBacklogPriorities,
+  useBacklogStatuses,
+} from "@/lib/backlog";
 
 type Props = {
   games: SteamGame[];
@@ -40,6 +44,8 @@ export default function GameSuggestion({
   const [genreProfile, setGenreProfile] =
     useState<Map<string, number>>(new Map());
   const recommendationRun = useRef(0);
+  const { statuses } = useBacklogStatuses();
+  const { priorities } = useBacklogPriorities();
 
   const friendActivityMap = useMemo(
     () =>
@@ -57,9 +63,10 @@ export default function GameSuggestion({
         category,
         games,
         recentGames,
-        friendActivityMap
+        friendActivityMap,
+        statuses
       ),
-    [category, games, recentGames, friendActivityMap]
+    [category, games, recentGames, friendActivityMap, statuses]
   );
   const suggestedGameFriendCount = suggestedGame
     ? friendActivityMap.get(suggestedGame.appid) ?? 0
@@ -90,7 +97,9 @@ export default function GameSuggestion({
           gameMetadata,
           recentGameIds,
           genreProfile,
-          friendActivityMap
+          friendActivityMap,
+          statuses,
+          priorities
         );
 
         return {
@@ -177,6 +186,9 @@ export default function GameSuggestion({
           <option value="forgotten">Forgotten Games</option>
           <option value="recentlyPlayed">Recently Played</option>
           <option value="friendsPlaying">Friends Are Playing</option>
+          <option value="wantToPlay">Want to Play</option>
+          <option value="playing">Continue Playing</option>
+          <option value="paused">Resume Paused</option>
           <option value="all">All Games</option>
         </select>
 
@@ -254,9 +266,9 @@ export default function GameSuggestion({
                   ).toFixed(1)} hours played`}
             </p>
 
-            <BacklogStatusSelect
+            <BacklogControls
               appid={suggestedGame.appid}
-              className="mt-4 max-w-48"
+              className="mt-4"
             />
 
             {metadata && (

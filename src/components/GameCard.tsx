@@ -2,7 +2,7 @@
 
 import { SteamGame } from "@/lib/steam";
 import GameImage from "@/components/GameImage";
-import BacklogStatusSelect from "@/components/BacklogStatusSelect";
+import BacklogControls from "@/components/BacklogControls";
 
 type Props = {
   game: SteamGame;
@@ -38,7 +38,7 @@ export default function GameCard({ game }: Props) {
             </p>
           )}
 
-        <BacklogStatusSelect appid={game.appid} className="mt-3" />
+        <BacklogControls appid={game.appid} className="mt-3" />
       </div>
     </div>
   );
