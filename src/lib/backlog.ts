@@ -1,6 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import {
+  parseStoredRecord,
+  updateStoredRecord,
+} from "@/lib/backlog-storage";
 
 export type BacklogStatus =
   | "wantToPlay"
@@ -10,6 +14,7 @@ export type BacklogStatus =
   | "dropped";
 
 export type BacklogPriority = "low" | "medium" | "high";
+export type BacklogRating = 1 | 2 | 3 | 4 | 5;
 
 export const BACKLOG_STATUS_OPTIONS: {
   value: BacklogStatus;
@@ -31,34 +36,20 @@ export const BACKLOG_PRIORITY_OPTIONS: {
   { value: "low", label: "Low priority" },
 ];
 
-type StoredRecord<T extends string> = Record<string, T>;
+type StoredRecord<T> = Record<string, T>;
 
-function createStoredRecord<T extends string>(
+function createStoredRecord<T>(
   storageKey: string,
   eventName: string,
-  validValues: readonly T[]
+  isValidValue: (value: unknown) => value is T
 ) {
   const emptyRecord: StoredRecord<T> = {};
   let cachedRaw: string | null | undefined;
   let cachedRecord: StoredRecord<T> = emptyRecord;
 
   function parseRecord(raw: string | null): StoredRecord<T> {
-    if (!raw) {
-      return emptyRecord;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-      return Object.fromEntries(
-        Object.entries(parsed).filter(
-          (entry): entry is [string, T] =>
-            validValues.includes(entry[1] as T)
-        )
-      );
-    } catch {
-      return emptyRecord;
-    }
+    const parsed = parseStoredRecord(raw, isValidValue);
+    return Object.keys(parsed).length > 0 ? parsed : emptyRecord;
   }
 
   function getSnapshot() {
@@ -83,14 +74,7 @@ function createStoredRecord<T extends string>(
   }
 
   function setValue(appid: number, value: T | null) {
-    const nextRecord = { ...getSnapshot() };
-    const key = String(appid);
-
-    if (value) {
-      nextRecord[key] = value;
-    } else {
-      delete nextRecord[key];
-    }
+    const nextRecord = updateStoredRecord(getSnapshot(), appid, value);
 
     const raw = JSON.stringify(nextRecord);
     window.localStorage.setItem(storageKey, raw);
@@ -110,12 +94,34 @@ function createStoredRecord<T extends string>(
 const statusStore = createStoredRecord<BacklogStatus>(
   "game-backlog:statuses:v1",
   "game-backlog-status-change",
-  BACKLOG_STATUS_OPTIONS.map((option) => option.value)
+  (value): value is BacklogStatus =>
+    BACKLOG_STATUS_OPTIONS.some((option) => option.value === value)
 );
 const priorityStore = createStoredRecord<BacklogPriority>(
   "game-backlog:priorities:v1",
   "game-backlog-priority-change",
-  BACKLOG_PRIORITY_OPTIONS.map((option) => option.value)
+  (value): value is BacklogPriority =>
+    BACKLOG_PRIORITY_OPTIONS.some((option) => option.value === value)
+);
+const noteStore = createStoredRecord<string>(
+  "game-backlog:notes:v1",
+  "game-backlog-note-change",
+  (value): value is string => typeof value === "string"
+);
+const ratingStore = createStoredRecord<BacklogRating>(
+  "game-backlog:ratings:v1",
+  "game-backlog-rating-change",
+  (value): value is BacklogRating =>
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 5
+);
+const statusDateStore = createStoredRecord<string>(
+  "game-backlog:status-dates:v1",
+  "game-backlog-status-date-change",
+  (value): value is string =>
+    typeof value === "string" && !Number.isNaN(Date.parse(value))
 );
 
 export function useBacklogStatuses() {
@@ -128,7 +134,13 @@ export function useBacklogStatuses() {
   return {
     statuses,
     getStatus: (appid: number) => statuses[String(appid)] ?? null,
-    setStatus: statusStore.setValue,
+    setStatus: (appid: number, status: BacklogStatus | null) => {
+      statusStore.setValue(appid, status);
+      statusDateStore.setValue(
+        appid,
+        status ? new Date().toISOString() : null
+      );
+    },
   };
 }
 
@@ -143,5 +155,47 @@ export function useBacklogPriorities() {
     priorities,
     getPriority: (appid: number) => priorities[String(appid)] ?? null,
     setPriority: priorityStore.setValue,
+  };
+}
+
+export function useBacklogNotes() {
+  const notes = useSyncExternalStore(
+    noteStore.subscribe,
+    noteStore.getSnapshot,
+    noteStore.getServerSnapshot
+  );
+
+  return {
+    notes,
+    getNote: (appid: number) => notes[String(appid)] ?? "",
+    setNote: (appid: number, note: string | null) =>
+      noteStore.setValue(appid, note?.trim() ? note.trim() : null),
+  };
+}
+
+export function useBacklogRatings() {
+  const ratings = useSyncExternalStore(
+    ratingStore.subscribe,
+    ratingStore.getSnapshot,
+    ratingStore.getServerSnapshot
+  );
+
+  return {
+    ratings,
+    getRating: (appid: number) => ratings[String(appid)] ?? null,
+    setRating: ratingStore.setValue,
+  };
+}
+
+export function useBacklogStatusDates() {
+  const statusDates = useSyncExternalStore(
+    statusDateStore.subscribe,
+    statusDateStore.getSnapshot,
+    statusDateStore.getServerSnapshot
+  );
+
+  return {
+    statusDates,
+    getStatusDate: (appid: number) => statusDates[String(appid)] ?? null,
   };
 }
