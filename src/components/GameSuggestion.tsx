@@ -6,12 +6,15 @@ import BacklogControls from "@/components/BacklogControls";
 import { FriendGameActivity } from "@/lib/friends";
 import { getGameMetadataBatch } from "@/lib/game-metadata-client";
 import {
-  RecommendationCategory,
+  RECOMMENDATION_MODES,
+  RecommendationMode,
+  ScoreBreakdownItem,
   buildGenreProfile,
   getCandidateGames,
-  getGamesByCategory,
-  getRecommendationReason,
+  getGamesForMode,
+  getRecommendationModeDescription,
   getTopRecommendation,
+  isRecommendableGame,
   scoreGameRecommendation,
 } from "@/lib/recommendations";
 import { SteamGame, SteamGameMetadata } from "@/lib/steam";
@@ -31,13 +34,15 @@ export default function GameSuggestion({
   recentGames,
   friendActivity,
 }: Props) {
-  const [category, setCategory] =
-    useState<RecommendationCategory>("unplayed");
+  const [mode, setMode] = useState<RecommendationMode>("backlog");
   const [suggestedGame, setSuggestedGame] =
     useState<SteamGame | null>(null);
   const [metadata, setMetadata] =
     useState<SteamGameMetadata | null>(null);
-  const [scoreReasons, setScoreReasons] = useState<string[]>([]);
+  const [scoreBreakdown, setScoreBreakdown] =
+    useState<ScoreBreakdownItem[]>([]);
+  const [recommendationScore, setRecommendationScore] = useState(0);
+  const [rejectedGameIds, setRejectedGameIds] = useState<number[]>([]);
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendationError, setRecommendationError] =
     useState<string | null>(null);
@@ -46,6 +51,10 @@ export default function GameSuggestion({
   const recommendationRun = useRef(0);
   const { statuses } = useBacklogStatuses();
   const { priorities } = useBacklogPriorities();
+  const rejectedGameIdSet = useMemo(
+    () => new Set(rejectedGameIds),
+    [rejectedGameIds]
+  );
 
   const friendActivityMap = useMemo(
     () =>
@@ -59,20 +68,28 @@ export default function GameSuggestion({
   );
   const eligibleGames = useMemo(
     () =>
-      getGamesByCategory(
-        category,
+      getGamesForMode(
+        mode,
         games,
         recentGames,
         friendActivityMap,
-        statuses
+        statuses,
+        rejectedGameIdSet
       ),
-    [category, games, recentGames, friendActivityMap, statuses]
+    [
+      friendActivityMap,
+      games,
+      mode,
+      recentGames,
+      rejectedGameIdSet,
+      statuses,
+    ]
   );
   const suggestedGameFriendCount = suggestedGame
     ? friendActivityMap.get(suggestedGame.appid) ?? 0
     : 0;
 
-  async function suggestGame() {
+  async function suggestGame(extraExcludedId?: number) {
     if (eligibleGames.length === 0) {
       return;
     }
@@ -83,43 +100,64 @@ export default function GameSuggestion({
     setRecommendationError(null);
 
     try {
-      const candidates = getCandidateGames(eligibleGames, 12);
+      const candidates = getCandidateGames(
+        extraExcludedId
+          ? eligibleGames.filter((game) => game.appid !== extraExcludedId)
+          : eligibleGames
+      );
+
+      if (candidates.length === 0) {
+        setSuggestedGame(null);
+        setRecommendationError("No other games match this mode right now.");
+        return;
+      }
+
       const metadataByAppId = await getGameMetadataBatch(
         candidates.map((game) => game.appid)
       );
       const recentGameIds = new Set(
         recentGames.map((game) => game.appid)
       );
-      const enrichedCandidates = candidates.map((game) => {
-        const gameMetadata = metadataByAppId.get(game.appid) ?? null;
-        const recommendationScore = scoreGameRecommendation(
-          game,
-          gameMetadata,
-          recentGameIds,
-          genreProfile,
-          friendActivityMap,
-          statuses,
-          priorities
-        );
+      const enrichedCandidates = candidates
+        .map((game) => {
+          const gameMetadata = metadataByAppId.get(game.appid) ?? null;
+          const score = scoreGameRecommendation(
+            mode,
+            game,
+            gameMetadata,
+            recentGameIds,
+            genreProfile,
+            friendActivityMap,
+            statuses,
+            priorities
+          );
 
-        return {
-          game,
-          metadata: gameMetadata,
-          ...recommendationScore,
-        };
-      });
+          return { game, metadata: gameMetadata, ...score };
+        })
+        .filter(({ metadata: gameMetadata }) =>
+          isRecommendableGame(gameMetadata)
+        );
       const recommendation = getTopRecommendation(
         enrichedCandidates,
         suggestedGame
       );
 
-      if (!recommendation || recommendationRun.current !== run) {
+      if (recommendationRun.current !== run) {
+        return;
+      }
+
+      if (!recommendation) {
+        setSuggestedGame(null);
+        setRecommendationError(
+          "No games with matching game metadata are available in this mode."
+        );
         return;
       }
 
       setSuggestedGame(recommendation.game);
       setMetadata(recommendation.metadata);
-      setScoreReasons(recommendation.reasons);
+      setScoreBreakdown(recommendation.breakdown);
+      setRecommendationScore(recommendation.score);
     } catch {
       if (recommendationRun.current === run) {
         setRecommendationError(
@@ -159,41 +197,51 @@ export default function GameSuggestion({
     };
   }, [recentGames]);
 
-  function changeCategory(nextCategory: RecommendationCategory) {
+  function changeMode(nextMode: RecommendationMode) {
     recommendationRun.current += 1;
-    setCategory(nextCategory);
+    setMode(nextMode);
     setSuggestedGame(null);
     setMetadata(null);
-    setScoreReasons([]);
+    setScoreBreakdown([]);
+    setRecommendationScore(0);
     setIsRecommending(false);
     setRecommendationError(null);
+  }
+
+  function rejectSuggestion() {
+    if (!suggestedGame) {
+      return;
+    }
+
+    const rejectedId = suggestedGame.appid;
+    setRejectedGameIds((ids) => [...ids.filter((id) => id !== rejectedId), rejectedId].slice(-5));
+    setSuggestedGame(null);
+    setMetadata(null);
+    setScoreBreakdown([]);
+    setRecommendationScore(0);
+    void suggestGame(rejectedId);
   }
 
   return (
     <section className="mt-8 rounded-xl border p-6">
       <div className="flex flex-wrap items-center gap-3">
         <select
-          value={category}
+          value={mode}
           onChange={(event) =>
-            changeCategory(
-              event.target.value as RecommendationCategory
-            )
+            changeMode(event.target.value as RecommendationMode)
           }
           className="rounded-lg border px-3 py-2"
+          aria-label="Recommendation mode"
         >
-          <option value="unplayed">Unplayed</option>
-          <option value="barelyPlayed">Barely Played</option>
-          <option value="forgotten">Forgotten Games</option>
-          <option value="recentlyPlayed">Recently Played</option>
-          <option value="friendsPlaying">Friends Are Playing</option>
-          <option value="wantToPlay">Want to Play</option>
-          <option value="playing">Continue Playing</option>
-          <option value="paused">Resume Paused</option>
-          <option value="all">All Games</option>
+          {RECOMMENDATION_MODES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
 
         <button
-          onClick={suggestGame}
+          onClick={() => void suggestGame()}
           disabled={eligibleGames.length === 0 || isRecommending}
           className="rounded-lg bg-black px-5 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -202,12 +250,13 @@ export default function GameSuggestion({
       </div>
 
       <p className="mt-3 text-sm text-gray-500">
-        {eligibleGames.length} eligible games
+        {getRecommendationModeDescription(mode)} {eligibleGames.length} eligible
+        games.
       </p>
 
       {eligibleGames.length === 0 && (
         <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-          No games are available in this category.
+          No games are available in this recommendation mode.
         </p>
       )}
 
@@ -234,21 +283,27 @@ export default function GameSuggestion({
               {suggestedGame.name}
             </h2>
             <p className="mt-2 text-sm text-gray-500">
-              {getRecommendationReason(category, suggestedGame)}
+              Selected using your backlog and Steam activity signals.
             </p>
 
-            {scoreReasons.length > 0 && (
+            {scoreBreakdown.length > 0 && (
               <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-900">
-                <p className="font-medium">Why this game</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-gray-600 dark:text-gray-300">
-                  {scoreReasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="font-medium">Score breakdown</p>
+                  <p className="font-semibold">{recommendationScore} points</p>
+                </div>
+                <ul className="mt-2 space-y-1 text-gray-600 dark:text-gray-300">
+                  {scoreBreakdown.map((item) => (
+                    <li key={item.label} className="flex justify-between gap-4">
+                      <span>{item.label}</span>
+                      <span className="font-medium">+{item.points}</span>
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {suggestedGameFriendCount > 0 && scoreReasons.length === 0 && (
+            {suggestedGameFriendCount > 0 && scoreBreakdown.length === 0 && (
               <p className="mt-1 text-sm text-gray-500">
                 {suggestedGameFriendCount}{" "}
                 {suggestedGameFriendCount === 1
@@ -322,11 +377,19 @@ export default function GameSuggestion({
                 Launch Game
               </a>
               <button
-                onClick={suggestGame}
+                onClick={() => void suggestGame()}
                 disabled={isRecommending}
                 className="rounded-lg border px-4 py-2 disabled:opacity-50"
               >
                 {isRecommending ? "Finding..." : "Try Another"}
+              </button>
+              <button
+                type="button"
+                onClick={rejectSuggestion}
+                disabled={isRecommending}
+                className="rounded-lg border border-red-300 px-4 py-2 text-red-700 disabled:opacity-50 dark:border-red-900 dark:text-red-300"
+              >
+                Not for me
               </button>
             </div>
           </div>

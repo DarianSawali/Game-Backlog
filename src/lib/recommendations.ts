@@ -1,26 +1,56 @@
-import {
-  SteamGame,
-  SteamGameMetadata,
-} from "@/lib/steam";
 import type {
   BacklogPriority,
   BacklogStatus,
 } from "@/lib/backlog";
+import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
-export type RecommendationCategory =
-  | "unplayed"
-  | "barelyPlayed"
-  | "forgotten"
-  | "recentlyPlayed"
-  | "friendsPlaying"
-  | "wantToPlay"
-  | "playing"
-  | "paused"
-  | "all";
+export type RecommendationMode =
+  | "backlog"
+  | "continue"
+  | "new"
+  | "quick"
+  | "friends";
+
+export const RECOMMENDATION_MODES: {
+  value: RecommendationMode;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "backlog",
+    label: "Pick from my backlog",
+    description: "Choose from games you marked to play, resume, or continue.",
+  },
+  {
+    value: "continue",
+    label: "Continue something",
+    description: "Return to an active, paused, or recently played game.",
+  },
+  {
+    value: "new",
+    label: "Try something new",
+    description: "Choose a game with no recorded playtime.",
+  },
+  {
+    value: "quick",
+    label: "Quick game",
+    description: "Choose something with less than two hours played.",
+  },
+  {
+    value: "friends",
+    label: "Friends are playing",
+    description: "Choose a game your friends played recently.",
+  },
+];
+
+export type ScoreBreakdownItem = {
+  label: string;
+  points: number;
+};
 
 export type RecommendationScore = {
   score: number;
-  reasons: string[];
+  breakdown: ScoreBreakdownItem[];
 };
 
 export type EnrichedGame = RecommendationScore & {
@@ -28,111 +58,65 @@ export type EnrichedGame = RecommendationScore & {
   metadata: SteamGameMetadata | null;
 };
 
-export function getUnplayedGames(games: SteamGame[]) {
-  return games.filter((game) => game.playtime_forever === 0);
-}
-
-export function getBarelyPlayedGames(games: SteamGame[]) {
-  return games.filter(
-    (game) =>
-      game.playtime_forever > 0 && game.playtime_forever < 120
-  );
-}
-
-export function getForgottenGames(
-  games: SteamGame[],
-  recentGames: SteamGame[]
-) {
-  const recentGameIds = new Set(
-    recentGames.map((game) => game.appid)
-  );
-
-  return games.filter(
-    (game) =>
-      game.playtime_forever >= 120 &&
-      !recentGameIds.has(game.appid)
-  );
-}
-
-export function getRecentlyPlayedGames(
-  games: SteamGame[],
-  recentGames: SteamGame[]
-) {
-  const recentGameIds = new Set(
-    recentGames.map((game) => game.appid)
-  );
-
-  return games.filter((game) => recentGameIds.has(game.appid));
-}
-
-export function getGamesByCategory(
-  category: RecommendationCategory,
+export function getGamesForMode(
+  mode: RecommendationMode,
   games: SteamGame[],
   recentGames: SteamGame[],
-  friendActivityMap?: Map<number, number>,
-  statuses: Record<string, BacklogStatus> = {}
+  friendActivityMap: Map<number, number>,
+  statuses: Record<string, BacklogStatus>,
+  rejectedGameIds: ReadonlySet<number> = new Set()
 ) {
-  const recommendableGames = games.filter((game) => {
+  const recentGameIds = new Set(recentGames.map((game) => game.appid));
+  const eligibleGames = games.filter((game) => {
     const status = statuses[String(game.appid)];
-    return status !== "completed" && status !== "dropped";
+    return (
+      status !== "completed" &&
+      status !== "dropped" &&
+      !rejectedGameIds.has(game.appid)
+    );
   });
 
-  switch (category) {
-    case "unplayed":
-      return getUnplayedGames(recommendableGames);
-    case "barelyPlayed":
-      return getBarelyPlayedGames(recommendableGames);
-    case "forgotten":
-      return getForgottenGames(recommendableGames, recentGames);
-    case "recentlyPlayed":
-      return getRecentlyPlayedGames(recommendableGames, recentGames);
-    case "friendsPlaying":
-      return recommendableGames.filter(
-        (game) =>
-          (friendActivityMap?.get(game.appid) ?? 0) > 0
+  switch (mode) {
+    case "backlog":
+      return eligibleGames.filter((game) => {
+        const status = statuses[String(game.appid)];
+        return status === "wantToPlay" || status === "playing" || status === "paused";
+      });
+    case "continue":
+      return eligibleGames.filter((game) => {
+        const status = statuses[String(game.appid)];
+        return (
+          game.playtime_forever > 0 &&
+          (status === "playing" ||
+            status === "paused" ||
+            recentGameIds.has(game.appid))
+        );
+      });
+    case "new":
+      return eligibleGames.filter((game) => game.playtime_forever === 0);
+    case "quick":
+      return eligibleGames.filter(
+        (game) => game.playtime_forever < 120
       );
-    case "wantToPlay":
-    case "playing":
-    case "paused":
-      return games.filter(
-        (game) => statuses[String(game.appid)] === category
+    case "friends":
+      return eligibleGames.filter(
+        (game) => (friendActivityMap.get(game.appid) ?? 0) > 0
       );
-    case "all":
-    default:
-      return recommendableGames;
   }
 }
 
-export function getRecommendationReason(
-  category: RecommendationCategory,
-  game: SteamGame
+export function isRecommendableGame(
+  metadata: SteamGameMetadata | null
 ) {
-  switch (category) {
-    case "unplayed":
-      return "You haven't played this game yet.";
-    case "barelyPlayed":
-      return `You've only played this for ${(
-        game.playtime_forever / 60
-      ).toFixed(1)} hours.`;
-    case "forgotten":
-      return "You've played this before, but not recently.";
-    case "recentlyPlayed":
-      return "You've been playing this recently.";
-    case "friendsPlaying":
-      return "Your friends have been playing this recently.";
-    case "wantToPlay":
-      return "You marked this as something you want to play.";
-    case "playing":
-      return "Continue a game that is already in progress.";
-    case "paused":
-      return "This could be a good time to resume a paused game.";
-    case "all":
-    default:
-      return "Selected from your Steam library.";
-  }
+  return metadata === null || metadata.type === "game";
+}
+
+export function getRecommendationModeDescription(mode: RecommendationMode) {
+  return RECOMMENDATION_MODES.find((option) => option.value === mode)?.description ?? "";
 }
 
 export function scoreGameRecommendation(
+  mode: RecommendationMode,
   game: SteamGame,
   metadata: SteamGameMetadata | null,
   recentGameIds: Set<number>,
@@ -141,47 +125,50 @@ export function scoreGameRecommendation(
   statuses: Record<string, BacklogStatus> = {},
   priorities: Record<string, BacklogPriority> = {}
 ): RecommendationScore {
-  let score = 0;
-  const reasons: string[] = [];
+  const breakdown: ScoreBreakdownItem[] = [];
   const status = statuses[String(game.appid)];
   const priority = priorities[String(game.appid)];
 
+  function addScore(label: string, points: number) {
+    breakdown.push({ label, points });
+  }
+
+  const modeMatches = {
+    backlog:
+      status === "wantToPlay" || status === "playing" || status === "paused",
+    continue:
+      game.playtime_forever > 0 &&
+      (status === "playing" || status === "paused" || recentGameIds.has(game.appid)),
+    new: game.playtime_forever === 0,
+    quick: game.playtime_forever < 120,
+    friends: (friendActivityMap.get(game.appid) ?? 0) > 0,
+  }[mode];
+
+  if (modeMatches) {
+    addScore("Strong match for this recommendation mode", 25);
+  }
+
   if (status === "playing") {
-    score += 35;
-    reasons.push("It is already in progress.");
+    addScore("Already in progress", 35);
   } else if (status === "wantToPlay") {
-    score += 25;
-    reasons.push("It is on your want-to-play list.");
+    addScore("On your want-to-play list", 25);
   } else if (status === "paused") {
-    score += 15;
-    reasons.push("It is ready to be resumed.");
+    addScore("Ready to resume", 15);
   }
 
   if (priority) {
-    const priorityBonus = {
-      high: 20,
-      medium: 10,
-      low: 5,
-    }[priority];
-    score += priorityBonus;
-    reasons.push(`${
-      priority[0].toUpperCase() + priority.slice(1)
-    } backlog priority.`);
+    const priorityBonus = { high: 20, medium: 10, low: 5 }[priority];
+    addScore(`${priority[0].toUpperCase() + priority.slice(1)} priority`, priorityBonus);
   }
 
-  if (game.playtime_forever === 0) {
-    score += 30;
-    reasons.push("It is still unplayed.");
+  if (recentGameIds.has(game.appid)) {
+    addScore("Played recently", 15);
+  } else if (game.playtime_forever === 0) {
+    addScore("Still unplayed", 30);
   } else if (game.playtime_forever < 120) {
-    score += 20;
-    reasons.push("You have barely played it.");
-  } else if (!recentGameIds.has(game.appid)) {
-    score += 10;
-    reasons.push("It has been out of your rotation.");
-  }
-
-  if (metadata?.type === "game") {
-    score += 15;
+    addScore("Less than two hours played", 20);
+  } else {
+    addScore("Out of your recent rotation", 10);
   }
 
   const matchingGenres = (metadata?.genres ?? [])
@@ -191,41 +178,36 @@ export function scoreGameRecommendation(
     }))
     .filter((genre) => genre.weight > 0);
   const genreBonus = Math.min(
-    matchingGenres.reduce(
-      (total, genre) => total + genre.weight * 5,
-      0
-    ),
+    matchingGenres.reduce((total, genre) => total + genre.weight * 5, 0),
     30
   );
 
   if (genreBonus > 0) {
-    score += genreBonus;
     const genreNames = matchingGenres
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 2)
       .map((genre) => genre.name);
-    reasons.push(
-      `It matches genres you play: ${genreNames.join(", ")}.`
-    );
+    addScore(`Matches your genres: ${genreNames.join(", ")}`, genreBonus);
   }
 
   const friendsPlaying = friendActivityMap.get(game.appid) ?? 0;
 
   if (friendsPlaying > 0) {
-    score += Math.min(friendsPlaying, 3) * 10;
-    reasons.push(
-      `${friendsPlaying} ${
-        friendsPlaying === 1 ? "friend has" : "friends have"
-      } played it recently.`
+    addScore(
+      `${friendsPlaying} ${friendsPlaying === 1 ? "friend has" : "friends have"} played it recently`,
+      Math.min(friendsPlaying, 3) * 10
     );
   }
 
-  return { score, reasons };
+  return {
+    score: breakdown.reduce((total, item) => total + item.points, 0),
+    breakdown,
+  };
 }
 
 export function getCandidateGames(
   games: SteamGame[],
-  limit = 12
+  limit = 24
 ) {
   const shuffled = [...games];
 
