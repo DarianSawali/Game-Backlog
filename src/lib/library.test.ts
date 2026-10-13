@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSortGames } from "@/lib/library";
+import {
+  createNormalizedNameIndex,
+  filterAndSortGames,
+} from "@/lib/library";
 import { SteamGame } from "@/lib/steam";
 
 const games: SteamGame[] = [
@@ -66,5 +69,26 @@ describe("filterAndSortGames", () => {
     );
 
     expect(result.map((game) => game.appid)).toEqual([2]);
+  });
+
+  it("reuses normalized names and handles equivalent Unicode searches", () => {
+    const accentedGames = [
+      { ...games[0], name: "Pok\u00e9mon" },
+    ];
+    const normalizedNames = createNormalizedNameIndex(accentedGames);
+    const result = filterAndSortGames(
+      accentedGames,
+      {},
+      {
+        search: "Poke\u0301mon",
+        playtimeFilter: "all",
+        statusFilter: "all",
+        sort: "nameAsc",
+      },
+      normalizedNames
+    );
+
+    expect(result).toEqual(accentedGames);
+    expect(normalizedNames.get(1)).toBe("poke\u0301mon");
   });
 });

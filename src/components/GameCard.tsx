@@ -17,7 +17,7 @@ export default function GameCard({ game }: Props) {
         appid={game.appid}
         name={game.name}
         iconHash={game.img_icon_url}
-        className="h-44 w-full object-cover"
+        className="w-full"
       />
 
       <div className="p-4">

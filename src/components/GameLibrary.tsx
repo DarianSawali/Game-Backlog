@@ -1,18 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Profiler, useEffect, useMemo, useState } from "react";
 import GameCard from "@/components/GameCard";
+import PerformanceSummary from "@/components/PerformanceSummary";
 import {
   BACKLOG_STATUS_OPTIONS,
   useBacklogStatuses,
 } from "@/lib/backlog";
 import {
   filterAndSortGames,
+  createNormalizedNameIndex,
   LibrarySort,
   PlaytimeFilter,
   StatusFilter,
 } from "@/lib/library";
 import { SteamGame } from "@/lib/steam";
+import { recordLibraryRender } from "@/lib/performance";
 
 type Props = {
   games: SteamGame[];
@@ -22,6 +25,7 @@ const PAGE_SIZE = 24;
 
 export default function GameLibrary({ games }: Props) {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [playtimeFilter, setPlaytimeFilter] =
     useState<PlaytimeFilter>("all");
   const [statusFilter, setStatusFilter] =
@@ -29,16 +33,42 @@ export default function GameLibrary({ games }: Props) {
   const [sort, setSort] = useState<LibrarySort>("playtimeDesc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const { statuses } = useBacklogStatuses();
+  const normalizedNames = useMemo(
+    () => createNormalizedNameIndex(games),
+    [games]
+  );
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search);
+      setVisibleCount(PAGE_SIZE);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
   const filteredGames = useMemo(
     () =>
-      filterAndSortGames(games, statuses, {
-        search,
-        playtimeFilter,
-        statusFilter,
-        sort,
-      }),
-    [games, playtimeFilter, search, sort, statusFilter, statuses]
+      filterAndSortGames(
+        games,
+        statuses,
+        {
+          search: debouncedSearch,
+          playtimeFilter,
+          statusFilter,
+          sort,
+        },
+        normalizedNames
+      ),
+    [
+      debouncedSearch,
+      games,
+      normalizedNames,
+      playtimeFilter,
+      sort,
+      statusFilter,
+      statuses,
+    ]
   );
 
   const visibleGames = filteredGames.slice(0, visibleCount);
@@ -56,6 +86,7 @@ export default function GameLibrary({ games }: Props) {
 
   function clearFilters() {
     setSearch("");
+    setDebouncedSearch("");
     setPlaytimeFilter("all");
     setStatusFilter("all");
     setSort("playtimeDesc");
@@ -101,7 +132,6 @@ export default function GameLibrary({ games }: Props) {
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
-              resetVisibleCount();
             }}
             placeholder="Search your library"
             className="w-full rounded-lg border bg-transparent px-3 py-2"
@@ -171,12 +201,21 @@ export default function GameLibrary({ games }: Props) {
         {filteredGames.length} matching games
       </p>
 
+      <PerformanceSummary />
+
       {visibleGames.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleGames.map((game) => (
-            <GameCard key={game.appid} game={game} />
-          ))}
-        </div>
+        <Profiler
+          id="library-grid"
+          onRender={(_id, _phase, actualDuration) =>
+            recordLibraryRender(actualDuration)
+          }
+        >
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleGames.map((game) => (
+              <GameCard key={game.appid} game={game} />
+            ))}
+          </div>
+        </Profiler>
       ) : (
         <div className="rounded-xl border border-dashed p-8 text-center text-gray-500">
           No games match these filters.

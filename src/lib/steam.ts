@@ -2,6 +2,8 @@ const STEAM_API_BASE = "https://api.steampowered.com";
 const STEAM_STORE_BASE = "https://store.steampowered.com/api";
 const STEAM_REQUEST_TIMEOUT_MS = 10_000;
 
+class NonRetryableSteamError extends Error {}
+
 export type SteamGame = {
   appid: number;
   name: string;
@@ -109,29 +111,48 @@ function createSteamApiUrl(
 
 async function fetchSteamJson<T>(
   url: URL,
-  options?: RequestInit
+  options?: RequestInit,
+  retries = 0
 ): Promise<T> {
-  let response: Response;
+  let lastError: Error | null = null;
 
-  try {
-    response = await fetch(url, {
-      ...options,
-      signal: AbortSignal.timeout(STEAM_REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown network error";
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(STEAM_REQUEST_TIMEOUT_MS),
+      });
 
-    throw new Error(`Steam request failed: ${message}`);
+      if (response.ok) {
+        return response.json() as Promise<T>;
+      }
+
+      lastError = new Error(
+        `Steam request failed: ${response.status} ${response.statusText}`
+      );
+
+      if (response.status < 500 && response.status !== 429) {
+        throw new NonRetryableSteamError(lastError.message);
+      }
+    } catch (error) {
+      if (error instanceof NonRetryableSteamError) {
+        throw error;
+      }
+
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error("Steam request failed: Unknown network error");
+    }
+
+    if (attempt < retries) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, 200 * 2 ** attempt)
+      );
+    }
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `Steam request failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<T>;
+  throw lastError ?? new Error("Steam request failed");
 }
 
 async function fetchRecentlyPlayedGamesForUser(
@@ -203,11 +224,15 @@ export async function getGameMetadata(
   let result: Record<string, SteamStoreResponse>;
 
   try {
-    result = await fetchSteamJson<Record<string, SteamStoreResponse>>(url, {
-      next: {
-        revalidate: 86_400,
+    result = await fetchSteamJson<Record<string, SteamStoreResponse>>(
+      url,
+      {
+        next: {
+          revalidate: 86_400,
+        },
       },
-    });
+      2
+    );
   } catch {
     return null;
   }

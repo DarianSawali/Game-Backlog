@@ -16,18 +16,31 @@ type LibraryOptions = {
   sort: LibrarySort;
 };
 
+export function createNormalizedNameIndex(games: SteamGame[]) {
+  return new Map(
+    games.map((game) => [
+      game.appid,
+      game.name.normalize("NFKD").toLocaleLowerCase(),
+    ])
+  );
+}
+
 export function filterAndSortGames(
   games: SteamGame[],
   statuses: Record<string, BacklogStatus>,
-  options: LibraryOptions
+  options: LibraryOptions,
+  normalizedNames = createNormalizedNameIndex(games)
 ) {
-  const normalizedSearch = options.search.trim().toLocaleLowerCase();
+  const normalizedSearch = options.search
+    .trim()
+    .normalize("NFKD")
+    .toLocaleLowerCase();
 
   return games
     .filter((game) => {
       if (
         normalizedSearch &&
-        !game.name.toLocaleLowerCase().includes(normalizedSearch)
+        !normalizedNames.get(game.appid)?.includes(normalizedSearch)
       ) {
         return false;
       }

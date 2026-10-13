@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 616 353" role="img" aria-labelledby="title description">
+  <title id="title">Game artwork placeholder</title>
+  <desc id="description">A simple game controller on a dark gradient background</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#27272a"/>
+      <stop offset="1" stop-color="#09090b"/>
+    </linearGradient>
+    <linearGradient id="controller" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a1a1aa"/>
+      <stop offset="1" stop-color="#52525b"/>
+    </linearGradient>
+  </defs>
+  <rect width="616" height="353" fill="url(#background)"/>
+  <circle cx="92" cy="70" r="120" fill="#3f3f46" opacity=".22"/>
+  <circle cx="535" cy="292" r="150" fill="#18181b" opacity=".8"/>
+  <path d="M230 119h156c33 0 55 21 64 53l24 87c8 29-26 51-49 31l-50-43H241l-50 43c-23 20-57-2-49-31l24-87c9-32 31-53 64-53Z" fill="url(#controller)" stroke="#d4d4d8" stroke-width="6"/>
+  <path d="M229 160v54M202 187h54" stroke="#18181b" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="393" cy="171" r="12" fill="#18181b"/>
+  <circle cx="421" cy="199" r="12" fill="#18181b"/>
+  <circle cx="344" cy="197" r="9" fill="#27272a"/>
+  <circle cx="370" cy="197" r="9" fill="#27272a"/>
+</svg>

@@ -8,6 +8,7 @@ const MAX_APP_IDS = 50;
 const METADATA_CONCURRENCY = 6;
 
 export async function GET(request: NextRequest) {
+  const startedAt = performance.now();
   const rawAppIds = request.nextUrl.searchParams.get("appids") ?? "";
   const appids = [
     ...new Set(
@@ -51,5 +52,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ games });
+  return NextResponse.json(
+    { games },
+    {
+      headers: {
+        "Cache-Control": "private, max-age=300",
+        "Server-Timing": `steam-metadata;dur=${(
+          performance.now() - startedAt
+        ).toFixed(1)}`,
+        "X-Metadata-Items": String(appids.length),
+      },
+    }
+  );
 }
