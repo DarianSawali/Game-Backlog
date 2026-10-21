@@ -12,6 +12,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

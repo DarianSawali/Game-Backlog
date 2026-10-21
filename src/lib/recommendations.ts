@@ -8,6 +8,7 @@ export type RecommendationMode =
   | "backlog"
   | "continue"
   | "new"
+  | "forgotten"
   | "quick"
   | "friends";
 
@@ -30,6 +31,11 @@ export const RECOMMENDATION_MODES: {
     value: "new",
     label: "Try something new",
     description: "Choose a game with no recorded playtime.",
+  },
+  {
+    value: "forgotten",
+    label: "Forgotten",
+    description: "Rediscover a game you played before but have not returned to recently.",
   },
   {
     value: "quick",
@@ -94,6 +100,10 @@ export function getGamesForMode(
       });
     case "new":
       return eligibleGames.filter((game) => game.playtime_forever === 0);
+    case "forgotten":
+      return eligibleGames.filter(
+        (game) => game.playtime_forever > 0 && !recentGameIds.has(game.appid)
+      );
     case "quick":
       return eligibleGames.filter(
         (game) => game.playtime_forever < 120
@@ -140,6 +150,7 @@ export function scoreGameRecommendation(
       game.playtime_forever > 0 &&
       (status === "playing" || status === "paused" || recentGameIds.has(game.appid)),
     new: game.playtime_forever === 0,
+    forgotten: game.playtime_forever > 0 && !recentGameIds.has(game.appid),
     quick: game.playtime_forever < 120,
     friends: (friendActivityMap.get(game.appid) ?? 0) > 0,
   }[mode];

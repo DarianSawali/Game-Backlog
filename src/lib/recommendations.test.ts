@@ -51,6 +51,19 @@ describe("recommendation modes", () => {
     ).toEqual([game]);
   });
 
+  it("finds played games outside the recent rotation for forgotten mode", () => {
+    const recent = { ...playedGame, appid: 12 };
+    expect(
+      getGamesForMode(
+        "forgotten",
+        [game, playedGame, recent],
+        [recent],
+        new Map(),
+        {}
+      )
+    ).toEqual([playedGame]);
+  });
+
   it("finds games below two hours for quick mode", () => {
     const shortGame = { ...game, appid: 12, playtime_forever: 119 };
     expect(
@@ -110,7 +123,7 @@ describe("recommendation scoring", () => {
   function score(
     overrides: Partial<SteamGame> = {},
     options: {
-      mode?: "backlog" | "continue" | "new" | "quick" | "friends";
+      mode?: "backlog" | "continue" | "new" | "forgotten" | "quick" | "friends";
       metadata?: SteamGameMetadata | null;
       recent?: Set<number>;
       genres?: Map<string, number>;
@@ -136,6 +149,22 @@ describe("recommendation scoring", () => {
     expect(score().breakdown).toContainEqual({
       label: "Strong match for this recommendation mode",
       points: 25,
+    });
+  });
+
+  it("scores a forgotten game when it is outside the recent rotation", () => {
+    const result = score(
+      { playtime_forever: 600 },
+      { mode: "forgotten" }
+    );
+
+    expect(result.breakdown).toContainEqual({
+      label: "Strong match for this recommendation mode",
+      points: 25,
+    });
+    expect(result.breakdown).toContainEqual({
+      label: "Out of your recent rotation",
+      points: 10,
     });
   });
 
