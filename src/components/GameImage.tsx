@@ -11,6 +11,7 @@ type Props = {
   appid: number;
   name: string;
   iconHash?: string;
+  artworkType?: "grid" | "hero";
   className?: string;
 };
 
@@ -76,7 +77,7 @@ function ImageWithFallback({
           loading="lazy"
           unoptimized={currentSource.presentation === "fallback"}
           onError={handleError}
-          className="object-contain"
+          className={currentSource.fit === "cover" ? "object-cover" : "object-contain"}
         />
       )}
     </div>
@@ -87,13 +88,14 @@ export default function GameImage({
   appid,
   name,
   iconHash,
+  artworkType = "grid",
   className = "",
 }: Props) {
-  const sources = getGameImageSources(appid, iconHash);
+  const sources = getGameImageSources(appid, iconHash, artworkType);
 
   return (
     <ImageWithFallback
-      key={`${appid}-${iconHash ?? "no-icon"}`}
+      key={`${appid}-${artworkType}-${iconHash ?? "no-icon"}`}
       name={name}
       sources={sources}
       className={className}

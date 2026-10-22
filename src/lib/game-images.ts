@@ -1,13 +1,20 @@
 export type GameImageSource = {
   src: string;
   presentation: "cover" | "icon" | "fallback";
+  fit?: "contain" | "cover";
 };
 
 export function getGameImageSources(
   appid: number,
-  iconHash?: string
+  iconHash?: string,
+  artworkType: "grid" | "hero" = "grid"
 ): GameImageSource[] {
   const sources: GameImageSource[] = [
+    {
+      src: `/api/artwork/${appid}?kind=${artworkType}`,
+      presentation: "cover",
+      fit: "cover",
+    },
     {
       src: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`,
       presentation: "cover",
