@@ -70,7 +70,8 @@ export function getGamesForMode(
   recentGames: SteamGame[],
   friendActivityMap: Map<number, number>,
   statuses: Record<string, BacklogStatus>,
-  rejectedGameIds: ReadonlySet<number> = new Set()
+  rejectedGameIds: ReadonlySet<number> = new Set(),
+  hiddenGameIds: ReadonlySet<number> = new Set()
 ) {
   const recentGameIds = new Set(recentGames.map((game) => game.appid));
   const eligibleGames = games.filter((game) => {
@@ -78,7 +79,8 @@ export function getGamesForMode(
     return (
       status !== "completed" &&
       status !== "dropped" &&
-      !rejectedGameIds.has(game.appid)
+      !rejectedGameIds.has(game.appid) &&
+      !hiddenGameIds.has(game.appid)
     );
   });
 
@@ -182,10 +184,13 @@ export function scoreGameRecommendation(
     addScore("Out of your recent rotation", 10);
   }
 
-  const matchingGenres = (metadata?.genres ?? [])
+  const matchingGenres = [...new Set([
+    ...(metadata?.genres ?? []).map((genre) => genre.description),
+    ...(metadata?.tags ?? []),
+  ])]
     .map((genre) => ({
-      name: genre.description,
-      weight: Math.min(genreProfile.get(genre.description) ?? 0, 3),
+      name: genre,
+      weight: Math.min(genreProfile.get(genre) ?? 0, 3),
     }))
     .filter((genre) => genre.weight > 0);
   const genreBonus = Math.min(
@@ -271,17 +276,26 @@ export function getTopRecommendation(
 }
 
 export function buildGenreProfile(
-  recentMetadata: SteamGameMetadata[]
+  recentMetadata: SteamGameMetadata[],
+  preferredGenres: string[] = []
 ) {
   const genreCounts = new Map<string, number>();
 
   for (const metadata of recentMetadata) {
-    for (const genre of metadata.genres ?? []) {
+    const storeLabels = [
+      ...(metadata.genres ?? []).map((genre) => genre.description),
+      ...(metadata.tags ?? []),
+    ];
+    for (const genre of new Set(storeLabels)) {
       genreCounts.set(
-        genre.description,
-        (genreCounts.get(genre.description) ?? 0) + 1
+        genre,
+        (genreCounts.get(genre) ?? 0) + 1
       );
     }
+  }
+
+  for (const genre of preferredGenres) {
+    genreCounts.set(genre, Math.max(genreCounts.get(genre) ?? 0, 3));
   }
 
   return genreCounts;

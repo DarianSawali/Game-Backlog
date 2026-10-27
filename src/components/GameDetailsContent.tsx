@@ -13,6 +13,7 @@ import {
   useBacklogPriorities,
   useBacklogRatings,
   useBacklogStatuses,
+  useHiddenGames,
 } from "@/lib/backlog";
 import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
@@ -21,6 +22,8 @@ export default function GameDetailsContent({ game, metadata }: { game: SteamGame
   const { getPriority, setPriority } = useBacklogPriorities();
   const { getRating, setRating } = useBacklogRatings();
   const { getNote, setNote } = useBacklogNotes();
+  const { isHidden, setHidden } = useHiddenGames();
+  const hidden = isHidden(game.appid);
 
   return (
     <main className="min-h-screen bg-[#070806] px-5 py-6 text-[#f4f0e6] sm:px-10 lg:px-14">
@@ -36,7 +39,8 @@ export default function GameDetailsContent({ game, metadata }: { game: SteamGame
               <div className="mt-4 flex flex-wrap gap-2 text-[9px] uppercase tracking-wider text-white/45"><span className="rounded-full border border-white/10 px-3 py-2">{game.playtime_forever ? `${(game.playtime_forever / 60).toFixed(1)} hours played` : "Unplayed"}</span>{metadata?.releaseDate && <span className="rounded-full border border-white/10 px-3 py-2">Released {metadata.releaseDate}</span>}{metadata?.controllerSupport && <span className="rounded-full border border-white/10 px-3 py-2">Controller {metadata.controllerSupport}</span>}</div>
               {metadata?.shortDescription && <p className="mt-6 max-w-3xl text-sm leading-7 text-white/55">{metadata.shortDescription}</p>}
               {metadata?.genres?.length ? <div className="mt-6 flex flex-wrap gap-2">{metadata.genres.map((genre) => <span key={genre.id} className="rounded-full border border-[#e4c66a]/25 bg-[#e4c66a]/5 px-3 py-1.5 text-[9px] uppercase tracking-wider text-[#e4c66a]">{genre.description}</span>)}</div> : null}
-              <div className="mt-8 flex flex-wrap gap-3"><a href={`steam://run/${game.appid}`} className="rounded-md bg-[#e4c66a] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-black transition hover:bg-[#f4dc8e]">Play now</a><a href={`https://store.steampowered.com/app/${game.appid}`} target="_blank" rel="noopener noreferrer" className="rounded-md border border-white/15 px-5 py-3 text-[10px] uppercase tracking-wider text-white/60 transition hover:border-[#e4c66a] hover:text-[#e4c66a]">View on Steam</a></div>
+              <div className="mt-8 flex flex-wrap gap-3"><a href={`steam://run/${game.appid}`} className="rounded-md bg-[#e4c66a] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-black transition hover:bg-[#f4dc8e]">Play now</a><a href={`https://store.steampowered.com/app/${game.appid}`} target="_blank" rel="noopener noreferrer" className="rounded-md border border-white/15 px-5 py-3 text-[10px] uppercase tracking-wider text-white/60 transition hover:border-[#e4c66a] hover:text-[#e4c66a]">View on Steam</a><button type="button" aria-pressed={hidden} onClick={() => setHidden(game.appid, !hidden)} className={`rounded-md border px-5 py-3 text-[10px] uppercase tracking-wider transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95 ${hidden ? "border-[#e4c66a]/50 bg-[#e4c66a]/10 text-[#e4c66a]" : "border-white/15 text-white/45 hover:border-[#e4c66a] hover:text-[#e4c66a]"}`}>{hidden ? "Restore to library" : "Hide game"}</button></div>
+              {hidden && <p role="status" className="mt-4 text-xs text-[#e4c66a]">Hidden from normal library views and recommendations.</p>}
             </div>
           </section>
 

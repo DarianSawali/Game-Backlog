@@ -1,34 +1,69 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import GameImage from "@/components/GameImage";
-import { BACKLOG_STATUS_OPTIONS, type BacklogStatus, useBacklogStatuses } from "@/lib/backlog";
-import type { SteamGame } from "@/lib/steam";
+import { BACKLOG_STATUS_OPTIONS, type BacklogStatus, useBacklogStatuses, useHiddenGames } from "@/lib/backlog";
+import { getGameMetadataBatch } from "@/lib/game-metadata-client";
+import { createLibrarySearchIndex } from "@/lib/library";
+import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
 const PAGE_SIZE = 24;
 
 export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<BacklogStatus | "all">("all");
+  const [filter, setFilter] = useState<BacklogStatus | "all" | "hidden">("all");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [metadataById, setMetadataById] = useState<Map<number, SteamGameMetadata | null>>(new Map());
+  const [genreIndexState, setGenreIndexState] = useState<"loading" | "ready" | "error">("loading");
   const { statuses, setStatus } = useBacklogStatuses();
+  const { hiddenGames, setHidden } = useHiddenGames();
+  const deferredSearch = useDeferredValue(search);
+  const searchIndex = useMemo(
+    () => createLibrarySearchIndex(games, metadataById),
+    [games, metadataById]
+  );
+  const activeGames = useMemo(
+    () => games.filter((game) => !hiddenGames[String(game.appid)]),
+    [games, hiddenGames]
+  );
   const visibleGames = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
+    const query = deferredSearch.trim().normalize("NFKD").toLocaleLowerCase();
     return games.filter((game) => {
-      const matchesSearch = !query || game.name.toLocaleLowerCase().includes(query);
-      const matchesStatus = filter === "all" || statuses[String(game.appid)] === filter;
-      return matchesSearch && matchesStatus;
+      const matchesSearch = !query || searchIndex.get(game.appid)?.includes(query);
+      const hidden = hiddenGames[String(game.appid)] === true;
+      const matchesVisibility = filter === "hidden" ? hidden : !hidden;
+      const matchesStatus = filter === "all" || filter === "hidden" || statuses[String(game.appid)] === filter;
+      return matchesSearch && matchesVisibility && matchesStatus;
     });
-  }, [filter, games, search, statuses]);
+  }, [deferredSearch, filter, games, hiddenGames, searchIndex, statuses]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function indexGenres() {
+      try {
+        const metadata = await getGameMetadataBatch(games.map((game) => game.appid));
+        if (!cancelled) {
+          setMetadataById(metadata);
+          setGenreIndexState("ready");
+        }
+      } catch {
+        if (!cancelled) setGenreIndexState("error");
+      }
+    }
+
+    void indexGenres();
+    return () => { cancelled = true; };
+  }, [games]);
 
   function changeSearch(value: string) {
     setSearch(value);
     setVisibleCount(PAGE_SIZE);
   }
 
-  function changeFilter(value: BacklogStatus | "all") {
+  function changeFilter(value: BacklogStatus | "all" | "hidden") {
     setFilter(value);
     setVisibleCount(PAGE_SIZE);
   }
@@ -39,12 +74,13 @@ export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
       <div className="mx-auto max-w-7xl py-10">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div><p className="text-[9px] uppercase tracking-[0.3em] text-[#e4c66a]">Your collection</p><h1 className="mt-2 font-serif text-4xl sm:text-5xl">Library</h1><p className="mt-2 text-sm text-white/40">Browse games and organize your backlog.</p></div>
-          <input type="search" value={search} onChange={(event) => changeSearch(event.target.value)} placeholder="Search games" className="w-full rounded-md border border-white/15 bg-[#11120f] px-4 py-3 text-sm outline-none transition duration-200 placeholder:text-white/25 hover:border-white/30 focus:border-[#e4c66a] focus:shadow-[0_0_0_3px_rgba(228,198,106,.1)] sm:w-72"/>
+          <div className="w-full sm:w-72"><input type="search" value={search} onChange={(event) => changeSearch(event.target.value)} placeholder="Search games, genres, or tags" className="w-full rounded-md border border-white/15 bg-[#11120f] px-4 py-3 text-sm outline-none transition duration-200 placeholder:text-white/25 hover:border-white/30 focus:border-[#e4c66a] focus:shadow-[0_0_0_3px_rgba(228,198,106,.1)]"/><p aria-live="polite" className="mt-2 text-right text-[9px] uppercase tracking-wider text-white/25">{genreIndexState === "loading" ? "Indexing genres and tags..." : genreIndexState === "error" ? "Name search available" : "Store search ready"}</p></div>
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto px-1 py-3">
-          <button type="button" aria-pressed={filter === "all"} onClick={() => changeFilter("all")} className={filterClass(filter === "all")}>All {games.length}</button>
-          {BACKLOG_STATUS_OPTIONS.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => changeFilter(option.value)} className={filterClass(filter === option.value)}>{option.label} {games.filter((game) => statuses[String(game.appid)] === option.value).length}</button>)}
+          <button type="button" aria-pressed={filter === "all"} onClick={() => changeFilter("all")} className={filterClass(filter === "all")}>All {activeGames.length}</button>
+          {BACKLOG_STATUS_OPTIONS.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => changeFilter(option.value)} className={filterClass(filter === option.value)}>{option.label} {activeGames.filter((game) => statuses[String(game.appid)] === option.value).length}</button>)}
+          <button type="button" aria-pressed={filter === "hidden"} onClick={() => changeFilter("hidden")} className={filterClass(filter === "hidden")}>Hidden {games.length - activeGames.length}</button>
         </div>
 
         <p className="mt-3 text-xs text-white/35">Showing {Math.min(visibleCount, visibleGames.length)} of {visibleGames.length} matching {visibleGames.length === 1 ? "game" : "games"}</p>
@@ -60,6 +96,7 @@ export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
                   <div className="flex items-stretch gap-2 p-4 pt-3">
                     <a href={`steam://run/${game.appid}`} className="inline-flex min-h-9 items-center justify-center rounded-md bg-[#e4c66a] px-3 py-2 text-[9px] font-bold uppercase leading-none tracking-wider text-black transition duration-200 hover:bg-[#f4dc8e] hover:shadow-[0_0_18px_rgba(228,198,106,.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#11120f] active:scale-95">Play</a>
                     <select aria-label={`${game.name} classification`} value={statuses[String(game.appid)] ?? ""} onChange={(event) => setStatus(game.appid, event.target.value ? event.target.value as BacklogStatus : null)} className="min-h-9 min-w-0 flex-1 cursor-pointer rounded-md border border-white/15 bg-[#191a17] px-2 py-2 text-xs outline-none transition duration-200 hover:border-white/30 focus:border-[#e4c66a] focus:ring-2 focus:ring-[#e4c66a]/15"><option value="">No status</option>{BACKLOG_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                    <button type="button" onClick={() => setHidden(game.appid, filter !== "hidden")} className="min-h-9 rounded-md border border-white/15 px-3 text-[9px] uppercase tracking-wider text-white/45 transition hover:border-[#e4c66a] hover:text-[#e4c66a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95">{filter === "hidden" ? "Restore" : "Hide"}</button>
                   </div>
                 </article>
               ))}

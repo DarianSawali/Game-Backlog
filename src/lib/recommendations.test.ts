@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGenreProfile,
   getGamesForMode,
   isRecommendableGame,
   scoreGameRecommendation,
@@ -101,6 +102,26 @@ describe("recommendation modes", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("excludes games hidden by the user", () => {
+    expect(
+      getGamesForMode(
+        "new",
+        [game, { ...game, appid: 12 }],
+        [],
+        new Map(),
+        {},
+        new Set(),
+        new Set([game.appid])
+      )
+    ).toEqual([{ ...game, appid: 12 }]);
+  });
+});
+
+describe("genre profile", () => {
+  it("gives explicit preferences the maximum genre weight", () => {
+    expect(buildGenreProfile([], ["RPG"]).get("RPG")).toBe(3);
   });
 });
 

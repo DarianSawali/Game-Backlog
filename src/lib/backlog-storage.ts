@@ -39,3 +39,28 @@ export function updateStoredRecord<T>(
 
   return nextRecord;
 }
+
+export function parseStoredStringArray(
+  raw: string | null,
+  allowedValues?: ReadonlySet<string>
+) {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return [...new Set(parsed.filter(
+      (value): value is string =>
+        typeof value === "string" && (!allowedValues || allowedValues.has(value))
+    ))];
+  } catch {
+    return [];
+  }
+}
+
+export function toggleStoredStringValue(values: string[], value: string) {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}

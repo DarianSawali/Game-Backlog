@@ -9,6 +9,8 @@ import {
   type BacklogStatus,
   useBacklogPriorities,
   useBacklogStatuses,
+  useGenrePreferences,
+  useHiddenGames,
 } from "@/lib/backlog";
 import {
   buildGenreProfile,
@@ -64,28 +66,33 @@ export default function GameMenuPreview({ games, recentGames, hasError, isMainPa
   const [libraryFilter, setLibraryFilter] = useState<BacklogStatus | "all">("all");
   const { statuses, setStatus } = useBacklogStatuses();
   const { priorities } = useBacklogPriorities();
+  const { hiddenGames } = useHiddenGames();
+  const { preferredGenres } = useGenrePreferences();
   const recommendationRun = useRef(0);
-  const trackedGames = useMemo(() => games.filter((game) => statuses[String(game.appid)]), [games, statuses]);
-  const continueGames = useMemo(() => games.filter((game) => {
+  const hiddenSet = useMemo(() => new Set(Object.keys(hiddenGames).map(Number)), [hiddenGames]);
+  const activeGames = useMemo(() => games.filter((game) => !hiddenSet.has(game.appid)), [games, hiddenSet]);
+  const activeRecentGames = useMemo(() => recentGames.filter((game) => !hiddenSet.has(game.appid)), [hiddenSet, recentGames]);
+  const trackedGames = useMemo(() => activeGames.filter((game) => statuses[String(game.appid)]), [activeGames, statuses]);
+  const continueGames = useMemo(() => activeGames.filter((game) => {
     const status = statuses[String(game.appid)];
     return status === "playing" || status === "paused";
-  }), [games, statuses]);
-  const savedGames = useMemo(() => games.filter((game) => statuses[String(game.appid)] === "wantToPlay" && game.playtime_forever === 0), [games, statuses]);
+  }), [activeGames, statuses]);
+  const savedGames = useMemo(() => activeGames.filter((game) => statuses[String(game.appid)] === "wantToPlay" && game.playtime_forever === 0), [activeGames, statuses]);
   const completedCount = trackedGames.filter((game) => statuses[String(game.appid)] === "completed").length;
   const filteredGames = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    return games.filter((game) => {
+    return activeGames.filter((game) => {
       const matchesSearch = !query || game.name.toLocaleLowerCase().includes(query);
       const matchesStatus = libraryFilter === "all" || statuses[String(game.appid)] === libraryFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [games, libraryFilter, search, statuses]);
+  }, [activeGames, libraryFilter, search, statuses]);
   const rejectedSet = useMemo(() => new Set(rejectedIds), [rejectedIds]);
   const suggestionCandidates = useMemo(
-    () => getGamesForMode(suggestionMode, games, recentGames, new Map(), statuses, rejectedSet),
-    [games, recentGames, rejectedSet, statuses, suggestionMode]
+    () => getGamesForMode(suggestionMode, games, activeRecentGames, new Map(), statuses, rejectedSet, hiddenSet),
+    [activeRecentGames, games, hiddenSet, rejectedSet, statuses, suggestionMode]
   );
-  const selectedGame = games.find((game) => game.appid === selectedId) ?? recentGames.find((game) => game.appid === selectedId) ?? games[0] ?? null;
+  const selectedGame = activeGames.find((game) => game.appid === selectedId) ?? activeRecentGames.find((game) => game.appid === selectedId) ?? activeGames[0] ?? null;
   const displayGame = pageView === "home" && section === "recommend" ? recommendation : selectedGame;
   const sectionGames = section === "continue" ? continueGames : savedGames;
 
@@ -94,7 +101,7 @@ export default function GameMenuPreview({ games, recentGames, hasError, isMainPa
   }
 
   async function prepareSuggestion(mode: SuggestionMode, excludedId?: number) {
-    const available = getGamesForMode(mode, games, recentGames, new Map(), statuses, new Set([...rejectedIds, ...(excludedId ? [excludedId] : [])]));
+    const available = getGamesForMode(mode, games, activeRecentGames, new Map(), statuses, new Set([...rejectedIds, ...(excludedId ? [excludedId] : [])]), hiddenSet);
     const candidates = getCandidateGames(available);
     if (!candidates.length) {
       setRecommendation(null);
@@ -104,10 +111,10 @@ export default function GameMenuPreview({ games, recentGames, hasError, isMainPa
     const run = ++recommendationRun.current;
     setRecommendationState("loading");
     try {
-      const metadataById = await getGameMetadataBatch([...new Set([...candidates.map((game) => game.appid), ...recentGames.map((game) => game.appid)])]);
-      const recentIds = new Set(recentGames.map((game) => game.appid));
-      const recentMetadata = recentGames.map((game) => metadataById.get(game.appid) ?? null).filter((item): item is SteamGameMetadata => item !== null);
-      const genreProfile = buildGenreProfile(recentMetadata);
+      const metadataById = await getGameMetadataBatch([...new Set([...candidates.map((game) => game.appid), ...activeRecentGames.map((game) => game.appid)])]);
+      const recentIds = new Set(activeRecentGames.map((game) => game.appid));
+      const recentMetadata = activeRecentGames.map((game) => metadataById.get(game.appid) ?? null).filter((item): item is SteamGameMetadata => item !== null);
+      const genreProfile = buildGenreProfile(recentMetadata, preferredGenres);
       const enriched = candidates.map((game) => {
         const metadata = metadataById.get(game.appid) ?? null;
         return { game, metadata, ...scoreGameRecommendation(mode, game, metadata, recentIds, genreProfile, new Map(), statuses, priorities) };

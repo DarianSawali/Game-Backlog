@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  createLibrarySearchIndex,
   createNormalizedNameIndex,
   filterAndSortGames,
+  getStoreLabels,
 } from "@/lib/library";
 import { SteamGame } from "@/lib/steam";
 
@@ -90,5 +92,31 @@ describe("filterAndSortGames", () => {
 
     expect(result).toEqual(accentedGames);
     expect(normalizedNames.get(1)).toBe("poke\u0301mon");
+  });
+
+  it("indexes game names together with Steam genres and tags", () => {
+    const index = createLibrarySearchIndex(
+      games,
+      new Map([[1, {
+        appid: 1,
+        name: "Alpha",
+        type: "game",
+        genres: [{ id: "3", description: "RPG" }],
+        tags: ["Survival"],
+      }]])
+    );
+
+    expect(index.get(1)).toContain("alpha");
+    expect(index.get(1)).toContain("rpg");
+    expect(index.get(1)).toContain("survival");
+  });
+
+  it("uses unique genres and tags returned by Steam Store metadata", () => {
+    const metadata = new Map([
+      [1, { appid: 1, name: "Alpha", type: "game", genres: [{ id: "3", description: "RPG" }], tags: ["Survival"] }],
+      [2, { appid: 2, name: "Beta", type: "game", genres: [{ id: "1", description: "Action" }, { id: "3", description: "RPG" }] }],
+    ]);
+
+    expect(getStoreLabels(metadata)).toEqual(["Action", "RPG", "Survival"]);
   });
 });

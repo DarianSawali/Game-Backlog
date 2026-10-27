@@ -2,7 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 import {
+  parseStoredStringArray,
   parseStoredRecord,
+  toggleStoredStringValue,
   updateStoredRecord,
 } from "@/lib/backlog-storage";
 
@@ -123,6 +125,38 @@ const statusDateStore = createStoredRecord<string>(
   (value): value is string =>
     typeof value === "string" && !Number.isNaN(Date.parse(value))
 );
+const hiddenGameStore = createStoredRecord<boolean>(
+  "game-backlog:hidden-games:v1",
+  "game-backlog-hidden-games-change",
+  (value): value is boolean => value === true
+);
+
+const genrePreferenceKey = "game-backlog:genre-preferences:v1";
+const genrePreferenceEvent = "game-backlog-genre-preferences-change";
+const emptyGenrePreferences: string[] = [];
+let cachedGenreRaw: string | null | undefined;
+let cachedGenrePreferences = emptyGenrePreferences;
+
+function getGenrePreferencesSnapshot() {
+  const raw = window.localStorage.getItem(genrePreferenceKey);
+  if (raw !== cachedGenreRaw) {
+    cachedGenreRaw = raw;
+    const parsed = parseStoredStringArray(raw).filter(
+      (genre) => genre.trim().length > 0 && genre.length <= 80
+    );
+    cachedGenrePreferences = parsed.length ? parsed : emptyGenrePreferences;
+  }
+  return cachedGenrePreferences;
+}
+
+function subscribeToGenrePreferences(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(genrePreferenceEvent, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(genrePreferenceEvent, callback);
+  };
+}
 
 export function useBacklogStatuses() {
   const statuses = useSyncExternalStore(
@@ -197,5 +231,42 @@ export function useBacklogStatusDates() {
   return {
     statusDates,
     getStatusDate: (appid: number) => statusDates[String(appid)] ?? null,
+  };
+}
+
+export function useHiddenGames() {
+  const hiddenGames = useSyncExternalStore(
+    hiddenGameStore.subscribe,
+    hiddenGameStore.getSnapshot,
+    hiddenGameStore.getServerSnapshot
+  );
+
+  return {
+    hiddenGames,
+    isHidden: (appid: number) => hiddenGames[String(appid)] === true,
+    setHidden: (appid: number, hidden: boolean) =>
+      hiddenGameStore.setValue(appid, hidden ? true : null),
+  };
+}
+
+export function useGenrePreferences() {
+  const preferredGenres = useSyncExternalStore(
+    subscribeToGenrePreferences,
+    getGenrePreferencesSnapshot,
+    () => emptyGenrePreferences
+  );
+
+  return {
+    preferredGenres,
+    toggleGenre: (genre: string) => {
+      const normalizedGenre = genre.trim();
+      if (!normalizedGenre || normalizedGenre.length > 80) return;
+      const next = toggleStoredStringValue(getGenrePreferencesSnapshot(), normalizedGenre);
+      const raw = JSON.stringify(next);
+      window.localStorage.setItem(genrePreferenceKey, raw);
+      cachedGenreRaw = raw;
+      cachedGenrePreferences = next.length ? next : emptyGenrePreferences;
+      window.dispatchEvent(new Event(genrePreferenceEvent));
+    },
   };
 }

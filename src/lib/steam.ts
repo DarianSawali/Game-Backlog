@@ -25,6 +25,7 @@ export type SteamGameMetadata = {
     id: string;
     description: string;
   }[];
+  tags?: string[];
   categories?: {
     id: number;
     description: string;
@@ -32,6 +33,52 @@ export type SteamGameMetadata = {
   releaseDate?: string;
   controllerSupport?: string;
 };
+
+function decodeHtmlEntities(value: string) {
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    quot: '"',
+  };
+
+  return value.replace(
+    /&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/gi,
+    (entity, decimal: string, hexadecimal: string, named: string) => {
+      if (decimal) return String.fromCodePoint(Number(decimal));
+      if (hexadecimal) return String.fromCodePoint(Number.parseInt(hexadecimal, 16));
+      return namedEntities[named.toLowerCase()] ?? entity;
+    }
+  );
+}
+
+export function parseSteamStoreTags(html: string) {
+  const tags = [...html.matchAll(
+    /<div[^>]*class=["'][^"']*\bapp_tag\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi
+  )].map((match) =>
+    decodeHtmlEntities(match[1].replace(/<[^>]+>/g, "")).trim()
+  );
+
+  return [...new Set(tags.filter(Boolean))];
+}
+
+async function getSteamStoreTags(appid: number) {
+  const url = new URL(`/apphoverpublic/${appid}`, STEAM_STORE_BASE);
+  url.searchParams.set("l", "english");
+
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(STEAM_REQUEST_TIMEOUT_MS),
+      next: { revalidate: 86_400 },
+    });
+
+    if (!response.ok) return [];
+    return parseSteamStoreTags(await response.text());
+  } catch {
+    return [];
+  }
+}
 
 export type SteamFriend = {
   steamid: string;
@@ -222,6 +269,7 @@ export async function getGameMetadata(
   url.searchParams.set("l", "english");
 
   let result: Record<string, SteamStoreResponse>;
+  const tagsPromise = getSteamStoreTags(appid);
 
   try {
     result = await fetchSteamJson<Record<string, SteamStoreResponse>>(
@@ -253,6 +301,7 @@ export async function getGameMetadata(
     developers: app.data.developers,
     publishers: app.data.publishers,
     genres: app.data.genres,
+    tags: await tagsPromise,
     categories: app.data.categories,
     releaseDate: app.data.release_date?.date,
     controllerSupport: app.data.controller_support,

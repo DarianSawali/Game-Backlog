@@ -36,6 +36,13 @@ function getCachedMetadata(appid: number) {
     return undefined;
   }
 
+  // Metadata cached before store-tag support has no `tags` field. Refetch it
+  // instead of keeping a valid-looking but incomplete search index for a day.
+  if (entry.metadata && !Array.isArray(entry.metadata.tags)) {
+    metadataCache.delete(appid);
+    return undefined;
+  }
+
   metadataCache.delete(appid);
   metadataCache.set(appid, entry);
   return entry.metadata;
@@ -76,7 +83,8 @@ export async function fetchMetadataWithRetry(
 
     try {
       response = await fetcher(
-        `/api/steam/games?appids=${appids.join(",")}`
+        `/api/steam/games?appids=${appids.join(",")}`,
+        { cache: "no-store" }
       );
     } catch (error) {
       lastError =

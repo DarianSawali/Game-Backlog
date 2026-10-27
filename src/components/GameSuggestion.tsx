@@ -21,6 +21,8 @@ import { SteamGame, SteamGameMetadata } from "@/lib/steam";
 import {
   useBacklogPriorities,
   useBacklogStatuses,
+  useGenrePreferences,
+  useHiddenGames,
 } from "@/lib/backlog";
 
 type Props = {
@@ -51,6 +53,23 @@ export default function GameSuggestion({
   const recommendationRun = useRef(0);
   const { statuses } = useBacklogStatuses();
   const { priorities } = useBacklogPriorities();
+  const { hiddenGames } = useHiddenGames();
+  const { preferredGenres } = useGenrePreferences();
+  const hiddenGameIdSet = useMemo(
+    () => new Set(Object.keys(hiddenGames).map(Number)),
+    [hiddenGames]
+  );
+  const activeRecentGames = useMemo(
+    () => recentGames.filter((game) => !hiddenGameIdSet.has(game.appid)),
+    [hiddenGameIdSet, recentGames]
+  );
+  const recommendationGenreProfile = useMemo(() => {
+    const profile = new Map(genreProfile);
+    for (const genre of preferredGenres) {
+      profile.set(genre, Math.max(profile.get(genre) ?? 0, 3));
+    }
+    return profile;
+  }, [genreProfile, preferredGenres]);
   const rejectedGameIdSet = useMemo(
     () => new Set(rejectedGameIds),
     [rejectedGameIds]
@@ -71,16 +90,18 @@ export default function GameSuggestion({
       getGamesForMode(
         mode,
         games,
-        recentGames,
+        activeRecentGames,
         friendActivityMap,
         statuses,
-        rejectedGameIdSet
+        rejectedGameIdSet,
+        hiddenGameIdSet
       ),
     [
       friendActivityMap,
       games,
+      hiddenGameIdSet,
       mode,
-      recentGames,
+      activeRecentGames,
       rejectedGameIdSet,
       statuses,
     ]
@@ -116,7 +137,7 @@ export default function GameSuggestion({
         candidates.map((game) => game.appid)
       );
       const recentGameIds = new Set(
-        recentGames.map((game) => game.appid)
+        activeRecentGames.map((game) => game.appid)
       );
       const enrichedCandidates = candidates
         .map((game) => {
@@ -126,7 +147,7 @@ export default function GameSuggestion({
             game,
             gameMetadata,
             recentGameIds,
-            genreProfile,
+            recommendationGenreProfile,
             friendActivityMap,
             statuses,
             priorities
@@ -176,7 +197,7 @@ export default function GameSuggestion({
 
     async function loadGenreProfile() {
       const metadataByAppId = await getGameMetadataBatch(
-        recentGames.map((game) => game.appid)
+        activeRecentGames.map((game) => game.appid)
       );
       const recentMetadata = [...metadataByAppId.values()].filter(
         (gameMetadata): gameMetadata is SteamGameMetadata =>
@@ -188,14 +209,12 @@ export default function GameSuggestion({
       }
     }
 
-    if (recentGames.length > 0) {
-      void loadGenreProfile();
-    }
+    void loadGenreProfile();
 
     return () => {
       cancelled = true;
     };
-  }, [recentGames]);
+  }, [activeRecentGames]);
 
   function changeMode(nextMode: RecommendationMode) {
     recommendationRun.current += 1;

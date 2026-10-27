@@ -1,5 +1,5 @@
 import { BacklogStatus } from "@/lib/backlog";
-import { SteamGame } from "@/lib/steam";
+import { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
 export type PlaytimeFilter = "all" | "unplayed" | "under2";
 export type StatusFilter = "all" | "untracked" | BacklogStatus;
@@ -23,6 +23,38 @@ export function createNormalizedNameIndex(games: SteamGame[]) {
       game.name.normalize("NFKD").toLocaleLowerCase(),
     ])
   );
+}
+
+export function createLibrarySearchIndex(
+  games: SteamGame[],
+  metadataById: ReadonlyMap<number, SteamGameMetadata | null>
+) {
+  return new Map(
+    games.map((game) => {
+      const metadata = metadataById.get(game.appid);
+      const storeLabels = [
+        ...(metadata?.genres?.map((genre) => genre.description) ?? []),
+        ...(metadata?.tags ?? []),
+      ].join(" ");
+      return [
+        game.appid,
+        `${game.name} ${storeLabels}`.trim().normalize("NFKD").toLocaleLowerCase(),
+      ];
+    })
+  );
+}
+
+export function getStoreLabels(
+  metadataById: ReadonlyMap<number, SteamGameMetadata | null>
+) {
+  return [...new Set(
+    [...metadataById.values()].flatMap((metadata) =>
+      [
+        ...(metadata?.genres ?? []).map((genre) => genre.description.trim()),
+        ...(metadata?.tags ?? []).map((tag) => tag.trim()),
+      ]
+    ).filter(Boolean)
+  )].sort((left, right) => left.localeCompare(right));
 }
 
 export function filterAndSortGames(

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseStoredStringArray,
   parseStoredRecord,
+  toggleStoredStringValue,
   updateStoredRecord,
 } from "@/lib/backlog-storage";
 
@@ -23,5 +25,21 @@ describe("backlog storage", () => {
     expect(source).toEqual({ "10": "playing" });
     expect(updated).toEqual({ "10": "playing", "12": "completed" });
     expect(removed).toEqual({ "12": "completed" });
+  });
+
+  it("parses unique allowed string preferences", () => {
+    expect(
+      parseStoredStringArray(
+        '["Action","RPG","Action","Unknown",12]',
+        new Set(["Action", "RPG"])
+      )
+    ).toEqual(["Action", "RPG"]);
+  });
+
+  it("toggles a string without mutating the source", () => {
+    const source = ["Action"];
+    expect(toggleStoredStringValue(source, "RPG")).toEqual(["Action", "RPG"]);
+    expect(toggleStoredStringValue(source, "Action")).toEqual([]);
+    expect(source).toEqual(["Action"]);
   });
 });

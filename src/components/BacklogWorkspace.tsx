@@ -9,6 +9,7 @@ import {
   useBacklogRatings,
   useBacklogStatusDates,
   useBacklogStatuses,
+  useHiddenGames,
 } from "@/lib/backlog";
 import {
   BacklogPriorityFilter,
@@ -36,11 +37,16 @@ export default function BacklogWorkspace({ games }: Props) {
   const { priorities } = useBacklogPriorities();
   const { ratings } = useBacklogRatings();
   const { statusDates } = useBacklogStatusDates();
+  const { hiddenGames } = useHiddenGames();
+  const activeGames = useMemo(
+    () => games.filter((game) => !hiddenGames[String(game.appid)]),
+    [games, hiddenGames]
+  );
 
   const filteredGames = useMemo(
     () =>
       filterAndSortBacklog(
-        games,
+        activeGames,
         statuses,
         priorities,
         ratings,
@@ -53,7 +59,7 @@ export default function BacklogWorkspace({ games }: Props) {
         }
       ),
     [
-      games,
+      activeGames,
       priorities,
       priorityFilter,
       ratings,
@@ -64,13 +70,13 @@ export default function BacklogWorkspace({ games }: Props) {
       statusFilter,
     ]
   );
-  const trackedCount = games.filter(
+  const trackedCount = activeGames.filter(
     (game) => statuses[String(game.appid)]
   ).length;
-  const completedCount = games.filter(
+  const completedCount = activeGames.filter(
     (game) => statuses[String(game.appid)] === "completed"
   ).length;
-  const highPriorityCount = games.filter((game) => {
+  const highPriorityCount = activeGames.filter((game) => {
     const key = String(game.appid);
     return statuses[key] && priorities[key] === "high";
   }).length;
