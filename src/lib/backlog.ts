@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   parseStoredStringArray,
   parseStoredRecord,
@@ -17,6 +17,58 @@ export type BacklogStatus =
 
 export type BacklogPriority = "low" | "medium" | "high";
 export type BacklogRating = 1 | 2 | 3 | 4 | 5;
+
+export type UserGameData = {
+  appId: number;
+  status: BacklogStatus | null;
+  priority: BacklogPriority | null;
+  rating: BacklogRating | null;
+  notes: string;
+  hidden: boolean;
+  rejectedAt: string | null;
+  statusChangedAt: string | null;
+};
+
+export type UserGameDataUpdate = Partial<
+  Omit<UserGameData, "appId" | "statusChangedAt">
+>;
+
+export function createUserGameIndexes(
+  userGames: Record<string, UserGameData>
+) {
+  const statuses: Record<string, BacklogStatus> = {};
+  const priorities: Record<string, BacklogPriority> = {};
+  const ratings: Record<string, BacklogRating> = {};
+  const statusDates: Record<string, string> = {};
+  const hiddenGameIds = new Set<number>();
+
+  for (const [key, data] of Object.entries(userGames)) {
+    if (data.status) statuses[key] = data.status;
+    if (data.priority) priorities[key] = data.priority;
+    if (data.rating) ratings[key] = data.rating;
+    if (data.statusChangedAt) statusDates[key] = data.statusChangedAt;
+    if (data.hidden) hiddenGameIds.add(data.appId);
+  }
+
+  const rejectedGameIds = new Set(
+    Object.values(userGames)
+      .filter((data) => data.rejectedAt)
+      .sort((left, right) =>
+        Date.parse(right.rejectedAt ?? "") - Date.parse(left.rejectedAt ?? "")
+      )
+      .slice(0, 5)
+      .map((data) => data.appId)
+  );
+
+  return {
+    statuses,
+    priorities,
+    ratings,
+    statusDates,
+    hiddenGameIds,
+    rejectedGameIds,
+  };
+}
 
 export const BACKLOG_STATUS_OPTIONS: {
   value: BacklogStatus;
@@ -130,6 +182,12 @@ const hiddenGameStore = createStoredRecord<boolean>(
   "game-backlog-hidden-games-change",
   (value): value is boolean => value === true
 );
+const rejectedAtStore = createStoredRecord<string>(
+  "game-backlog:rejected-at:v1",
+  "game-backlog-rejected-at-change",
+  (value): value is string =>
+    typeof value === "string" && !Number.isNaN(Date.parse(value))
+);
 
 const genrePreferenceKey = "game-backlog:genre-preferences:v1";
 const genrePreferenceEvent = "game-backlog-genre-preferences-change";
@@ -158,94 +216,100 @@ function subscribeToGenrePreferences(callback: () => void) {
   };
 }
 
-export function useBacklogStatuses() {
+export function useUserGameData() {
   const statuses = useSyncExternalStore(
     statusStore.subscribe,
     statusStore.getSnapshot,
     statusStore.getServerSnapshot
   );
-
-  return {
-    statuses,
-    getStatus: (appid: number) => statuses[String(appid)] ?? null,
-    setStatus: (appid: number, status: BacklogStatus | null) => {
-      statusStore.setValue(appid, status);
-      statusDateStore.setValue(
-        appid,
-        status ? new Date().toISOString() : null
-      );
-    },
-  };
-}
-
-export function useBacklogPriorities() {
   const priorities = useSyncExternalStore(
     priorityStore.subscribe,
     priorityStore.getSnapshot,
     priorityStore.getServerSnapshot
   );
-
-  return {
-    priorities,
-    getPriority: (appid: number) => priorities[String(appid)] ?? null,
-    setPriority: priorityStore.setValue,
-  };
-}
-
-export function useBacklogNotes() {
   const notes = useSyncExternalStore(
     noteStore.subscribe,
     noteStore.getSnapshot,
     noteStore.getServerSnapshot
   );
-
-  return {
-    notes,
-    getNote: (appid: number) => notes[String(appid)] ?? "",
-    setNote: (appid: number, note: string | null) =>
-      noteStore.setValue(appid, note?.trim() ? note.trim() : null),
-  };
-}
-
-export function useBacklogRatings() {
   const ratings = useSyncExternalStore(
     ratingStore.subscribe,
     ratingStore.getSnapshot,
     ratingStore.getServerSnapshot
   );
-
-  return {
-    ratings,
-    getRating: (appid: number) => ratings[String(appid)] ?? null,
-    setRating: ratingStore.setValue,
-  };
-}
-
-export function useBacklogStatusDates() {
   const statusDates = useSyncExternalStore(
     statusDateStore.subscribe,
     statusDateStore.getSnapshot,
     statusDateStore.getServerSnapshot
   );
-
-  return {
-    statusDates,
-    getStatusDate: (appid: number) => statusDates[String(appid)] ?? null,
-  };
-}
-
-export function useHiddenGames() {
   const hiddenGames = useSyncExternalStore(
     hiddenGameStore.subscribe,
     hiddenGameStore.getSnapshot,
     hiddenGameStore.getServerSnapshot
   );
+  const rejectedDates = useSyncExternalStore(
+    rejectedAtStore.subscribe,
+    rejectedAtStore.getSnapshot,
+    rejectedAtStore.getServerSnapshot
+  );
+
+  const userGames = useMemo(() => {
+    const appIds = new Set([
+      ...Object.keys(statuses),
+      ...Object.keys(priorities),
+      ...Object.keys(ratings),
+      ...Object.keys(notes),
+      ...Object.keys(hiddenGames),
+      ...Object.keys(rejectedDates),
+      ...Object.keys(statusDates),
+    ]);
+
+    return Object.fromEntries([...appIds].map((key) => [key, {
+      appId: Number(key),
+      status: statuses[key] ?? null,
+      priority: priorities[key] ?? null,
+      rating: ratings[key] ?? null,
+      notes: notes[key] ?? "",
+      hidden: hiddenGames[key] === true,
+      rejectedAt: rejectedDates[key] ?? null,
+      statusChangedAt: statusDates[key] ?? null,
+    }])) as Record<string, UserGameData>;
+  }, [hiddenGames, notes, priorities, ratings, rejectedDates, statusDates, statuses]);
+
+  const getGameData = useCallback((appId: number): UserGameData =>
+    userGames[String(appId)] ?? {
+      appId,
+      status: null,
+      priority: null,
+      rating: null,
+      notes: "",
+      hidden: false,
+      rejectedAt: null,
+      statusChangedAt: null,
+    }, [userGames]);
+
+  const updateGameData = useCallback((appId: number, update: UserGameDataUpdate) => {
+    if ("status" in update) {
+      statusStore.setValue(appId, update.status ?? null);
+      statusDateStore.setValue(
+        appId,
+        update.status ? new Date().toISOString() : null
+      );
+    }
+    if ("priority" in update) priorityStore.setValue(appId, update.priority ?? null);
+    if ("rating" in update) ratingStore.setValue(appId, update.rating ?? null);
+    if ("notes" in update) {
+      const value = update.notes?.trim() ?? "";
+      noteStore.setValue(appId, value || null);
+    }
+    if ("hidden" in update) hiddenGameStore.setValue(appId, update.hidden ? true : null);
+    if ("rejectedAt" in update) rejectedAtStore.setValue(appId, update.rejectedAt ?? null);
+  }, []);
 
   return {
-    hiddenGames,
-    isHidden: (appid: number) => hiddenGames[String(appid)] === true,
-    setHidden: (appid: number, hidden: boolean) =>
-      hiddenGameStore.setValue(appid, hidden ? true : null),
+    userGames,
+    getGameData,
+    updateGameData,
   };
 }
 

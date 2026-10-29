@@ -3,11 +3,15 @@ import BacklogWorkspace from "@/components/BacklogWorkspace";
 import { getOwnedGames, SteamGame } from "@/lib/steam";
 
 export default async function BacklogPage() {
+  const steamId = process.env.STEAM_ID;
   let games: SteamGame[] = [];
   let error = false;
 
   try {
-    games = await getOwnedGames();
+    if (!steamId) throw new Error("STEAM_ID is missing");
+    const result = await getOwnedGames(steamId);
+    if (result.status !== "available") throw new Error("Steam library unavailable");
+    games = result.games;
   } catch {
     error = true;
   }

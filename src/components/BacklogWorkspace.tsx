@@ -5,11 +5,8 @@ import BacklogGameEditor from "@/components/BacklogGameEditor";
 import {
   BACKLOG_PRIORITY_OPTIONS,
   BACKLOG_STATUS_OPTIONS,
-  useBacklogPriorities,
-  useBacklogRatings,
-  useBacklogStatusDates,
-  useBacklogStatuses,
-  useHiddenGames,
+  createUserGameIndexes,
+  useUserGameData,
 } from "@/lib/backlog";
 import {
   BacklogPriorityFilter,
@@ -33,14 +30,14 @@ export default function BacklogWorkspace({ games }: Props) {
     useState<BacklogPriorityFilter>("all");
   const [sort, setSort] = useState<BacklogSort>("priority");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const { statuses } = useBacklogStatuses();
-  const { priorities } = useBacklogPriorities();
-  const { ratings } = useBacklogRatings();
-  const { statusDates } = useBacklogStatusDates();
-  const { hiddenGames } = useHiddenGames();
+  const { userGames } = useUserGameData();
+  const { statuses, priorities, ratings, statusDates, hiddenGameIds } = useMemo(
+    () => createUserGameIndexes(userGames),
+    [userGames]
+  );
   const activeGames = useMemo(
-    () => games.filter((game) => !hiddenGames[String(game.appid)]),
-    [games, hiddenGames]
+    () => games.filter((game) => !hiddenGameIds.has(game.appid)),
+    [games, hiddenGameIds]
   );
 
   const filteredGames = useMemo(

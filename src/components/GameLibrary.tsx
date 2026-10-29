@@ -5,7 +5,8 @@ import GameCard from "@/components/GameCard";
 import PerformanceSummary from "@/components/PerformanceSummary";
 import {
   BACKLOG_STATUS_OPTIONS,
-  useBacklogStatuses,
+  createUserGameIndexes,
+  useUserGameData,
 } from "@/lib/backlog";
 import {
   filterAndSortGames,
@@ -32,7 +33,11 @@ export default function GameLibrary({ games }: Props) {
     useState<StatusFilter>("all");
   const [sort, setSort] = useState<LibrarySort>("playtimeDesc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const { statuses } = useBacklogStatuses();
+  const { userGames } = useUserGameData();
+  const { statuses } = useMemo(
+    () => createUserGameIndexes(userGames),
+    [userGames]
+  );
   const normalizedNames = useMemo(
     () => createNormalizedNameIndex(games),
     [games]

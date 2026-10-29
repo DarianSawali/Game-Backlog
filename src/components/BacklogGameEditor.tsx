@@ -4,9 +4,7 @@ import BacklogControls from "@/components/BacklogControls";
 import GameImage from "@/components/GameImage";
 import {
   BacklogRating,
-  useBacklogNotes,
-  useBacklogRatings,
-  useBacklogStatusDates,
+  useUserGameData,
 } from "@/lib/backlog";
 import type { SteamGame } from "@/lib/steam";
 
@@ -15,10 +13,8 @@ type Props = {
 };
 
 export default function BacklogGameEditor({ game }: Props) {
-  const { getNote, setNote } = useBacklogNotes();
-  const { getRating, setRating } = useBacklogRatings();
-  const { getStatusDate } = useBacklogStatusDates();
-  const statusDate = getStatusDate(game.appid);
+  const { getGameData, updateGameData } = useUserGameData();
+  const gameData = getGameData(game.appid);
 
   return (
     <article className="overflow-hidden rounded-xl border">
@@ -37,14 +33,13 @@ export default function BacklogGameEditor({ game }: Props) {
             Personal rating
           </span>
           <select
-            value={getRating(game.appid) ?? ""}
+            value={gameData.rating ?? ""}
             onChange={(event) =>
-              setRating(
-                game.appid,
-                event.target.value
+              updateGameData(game.appid, {
+                rating: event.target.value
                   ? (Number(event.target.value) as BacklogRating)
-                  : null
-              )
+                  : null,
+              })
             }
             className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm"
           >
@@ -60,9 +55,9 @@ export default function BacklogGameEditor({ game }: Props) {
         <label className="mt-4 block">
           <span className="mb-1 block text-sm font-medium">Notes</span>
           <textarea
-            key={getNote(game.appid)}
-            defaultValue={getNote(game.appid)}
-            onBlur={(event) => setNote(game.appid, event.target.value)}
+            key={gameData.notes}
+            defaultValue={gameData.notes}
+            onBlur={(event) => updateGameData(game.appid, { notes: event.target.value })}
             placeholder="Add a reminder or your thoughts..."
             rows={3}
             maxLength={500}
@@ -71,10 +66,10 @@ export default function BacklogGameEditor({ game }: Props) {
         </label>
 
         <p className="mt-3 text-xs text-gray-500">
-          {statusDate
+          {gameData.statusChangedAt
             ? `Status changed ${new Intl.DateTimeFormat(undefined, {
                 dateStyle: "medium",
-              }).format(new Date(statusDate))}`
+              }).format(new Date(gameData.statusChangedAt))}`
             : "Status change date is not available yet."}
         </p>
       </div>

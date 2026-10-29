@@ -19,10 +19,9 @@ import {
 } from "@/lib/recommendations";
 import { SteamGame, SteamGameMetadata } from "@/lib/steam";
 import {
-  useBacklogPriorities,
-  useBacklogStatuses,
+  createUserGameIndexes,
   useGenrePreferences,
-  useHiddenGames,
+  useUserGameData,
 } from "@/lib/backlog";
 
 type Props = {
@@ -44,20 +43,17 @@ export default function GameSuggestion({
   const [scoreBreakdown, setScoreBreakdown] =
     useState<ScoreBreakdownItem[]>([]);
   const [recommendationScore, setRecommendationScore] = useState(0);
-  const [rejectedGameIds, setRejectedGameIds] = useState<number[]>([]);
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendationError, setRecommendationError] =
     useState<string | null>(null);
   const [genreProfile, setGenreProfile] =
     useState<Map<string, number>>(new Map());
   const recommendationRun = useRef(0);
-  const { statuses } = useBacklogStatuses();
-  const { priorities } = useBacklogPriorities();
-  const { hiddenGames } = useHiddenGames();
+  const { userGames, updateGameData } = useUserGameData();
   const { preferredGenres } = useGenrePreferences();
-  const hiddenGameIdSet = useMemo(
-    () => new Set(Object.keys(hiddenGames).map(Number)),
-    [hiddenGames]
+  const { statuses, priorities, hiddenGameIds: hiddenGameIdSet, rejectedGameIds: rejectedGameIdSet } = useMemo(
+    () => createUserGameIndexes(userGames),
+    [userGames]
   );
   const activeRecentGames = useMemo(
     () => recentGames.filter((game) => !hiddenGameIdSet.has(game.appid)),
@@ -70,11 +66,6 @@ export default function GameSuggestion({
     }
     return profile;
   }, [genreProfile, preferredGenres]);
-  const rejectedGameIdSet = useMemo(
-    () => new Set(rejectedGameIds),
-    [rejectedGameIds]
-  );
-
   const friendActivityMap = useMemo(
     () =>
       new Map(
@@ -233,7 +224,7 @@ export default function GameSuggestion({
     }
 
     const rejectedId = suggestedGame.appid;
-    setRejectedGameIds((ids) => [...ids.filter((id) => id !== rejectedId), rejectedId].slice(-5));
+    updateGameData(rejectedId, { rejectedAt: new Date().toISOString() });
     setSuggestedGame(null);
     setMetadata(null);
     setScoreBreakdown([]);

@@ -6,8 +6,8 @@ import {
   BACKLOG_STATUS_OPTIONS,
   BacklogPriority,
   BacklogStatus,
-  useBacklogPriorities,
-  useBacklogStatuses,
+  createUserGameIndexes,
+  useUserGameData,
 } from "@/lib/backlog";
 import { SteamGame } from "@/lib/steam";
 
@@ -24,8 +24,11 @@ const priorityWeight: Record<BacklogPriority, number> = {
 export default function BacklogDashboard({ games }: Props) {
   const [selectedStatus, setSelectedStatus] =
     useState<BacklogStatus>("playing");
-  const { statuses } = useBacklogStatuses();
-  const { priorities } = useBacklogPriorities();
+  const { userGames } = useUserGameData();
+  const { statuses, priorities } = useMemo(
+    () => createUserGameIndexes(userGames),
+    [userGames]
+  );
   const counts = useMemo(
     () =>
       Object.fromEntries(

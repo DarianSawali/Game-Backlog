@@ -1,3 +1,5 @@
+import type { SteamLibraryResult } from "@/lib/library-sync";
+
 const STEAM_API_BASE = "https://api.steampowered.com";
 const STEAM_STORE_BASE = "https://store.steampowered.com/api";
 const STEAM_REQUEST_TIMEOUT_MS = 10_000;
@@ -86,6 +88,13 @@ export type SteamFriend = {
   friend_since: number;
 };
 
+export type SteamPlayerProfile = {
+  steamId: string;
+  displayName: string;
+  avatarUrl: string;
+  profileUrl: string;
+};
+
 type SteamLibraryResponse = {
   response?: {
     game_count?: number;
@@ -103,6 +112,17 @@ type RecentlyPlayedResponse = {
 type FriendListResponse = {
   friendslist?: {
     friends?: SteamFriend[];
+  };
+};
+
+type PlayerSummariesResponse = {
+  response?: {
+    players?: {
+      steamid: string;
+      personaname: string;
+      avatarfull: string;
+      profileurl: string;
+    }[];
   };
 };
 
@@ -132,15 +152,19 @@ type SteamStoreResponse = {
   };
 };
 
-function getSteamCredentials() {
+function getSteamApiKey() {
   const apiKey = process.env.STEAM_API_KEY;
-  const steamId = process.env.STEAM_ID;
 
-  if (!apiKey || !steamId) {
-    throw new Error("Steam environment variables are missing");
+  if (!apiKey) throw new Error("STEAM_API_KEY is missing");
+  return apiKey;
+}
+
+function validateSteamId(steamId: string) {
+  const normalized = steamId.trim();
+  if (!/^\d{17}$/.test(normalized)) {
+    throw new Error("A valid 17-digit Steam ID is required");
   }
-
-  return { apiKey, steamId };
+  return normalized;
 }
 
 function createSteamApiUrl(
@@ -202,20 +226,17 @@ async function fetchSteamJson<T>(
   throw lastError ?? new Error("Steam request failed");
 }
 
-async function fetchRecentlyPlayedGamesForUser(
+export async function getRecentlyPlayedGames(
   steamId: string
 ): Promise<SteamGame[]> {
-  const apiKey = process.env.STEAM_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("STEAM_API_KEY is missing");
-  }
+  const apiKey = getSteamApiKey();
+  const userSteamId = validateSteamId(steamId);
 
   const url = createSteamApiUrl(
     "/IPlayerService/GetRecentlyPlayedGames/v1/",
     {
       key: apiKey,
-      steamid: steamId,
+      steamid: userSteamId,
       count: "0",
     }
   );
@@ -227,38 +248,48 @@ async function fetchRecentlyPlayedGamesForUser(
   return data.response?.games ?? [];
 }
 
-export async function getRecentlyPlayedGamesForUser(
+export async function getOwnedGames(
   steamId: string
-): Promise<SteamGame[]> {
-  try {
-    return await fetchRecentlyPlayedGamesForUser(steamId);
-  } catch {
-    // Private profiles and unavailable friend activity are expected.
-    return [];
-  }
-}
-
-export async function getRecentlyPlayedGames(): Promise<SteamGame[]> {
-  const { steamId } = getSteamCredentials();
-  return fetchRecentlyPlayedGamesForUser(steamId);
-}
-
-export async function getOwnedGames(): Promise<SteamGame[]> {
-  const { apiKey, steamId } = getSteamCredentials();
+): Promise<SteamLibraryResult> {
+  const apiKey = getSteamApiKey();
+  const userSteamId = validateSteamId(steamId);
   const url = createSteamApiUrl(
     "/IPlayerService/GetOwnedGames/v1/",
     {
       key: apiKey,
-      steamid: steamId,
+      steamid: userSteamId,
       include_appinfo: "true",
       include_played_free_games: "true",
     }
   );
-  const data = await fetchSteamJson<SteamLibraryResponse>(url, {
-    cache: "no-store",
-  });
+  let data: SteamLibraryResponse;
 
-  return data.response?.games ?? [];
+  try {
+    data = await fetchSteamJson<SteamLibraryResponse>(url, {
+      cache: "no-store",
+    });
+  } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : "Steam library request failed";
+
+    return {
+      status: "failed",
+      reason: message.includes("429")
+        ? "rate-limited"
+        : "steam-unavailable",
+      message,
+    };
+  }
+
+  if (typeof data.response?.game_count !== "number") {
+    return { status: "private" };
+  }
+
+  return {
+    status: "available",
+    games: data.response.games ?? [],
+  };
 }
 
 export async function getGameMetadata(
@@ -308,13 +339,36 @@ export async function getGameMetadata(
   };
 }
 
-export async function getFriendList(): Promise<SteamFriend[]> {
-  const { apiKey, steamId } = getSteamCredentials();
+export async function getPlayerProfile(
+  steamId: string
+): Promise<SteamPlayerProfile | null> {
+  const apiKey = getSteamApiKey();
+  const userSteamId = validateSteamId(steamId);
+  const url = createSteamApiUrl(
+    "/ISteamUser/GetPlayerSummaries/v2/",
+    { key: apiKey, steamids: userSteamId }
+  );
+  const data = await fetchSteamJson<PlayerSummariesResponse>(url, {
+    cache: "no-store",
+  });
+  const player = data.response?.players?.[0];
+
+  return player ? {
+    steamId: player.steamid,
+    displayName: player.personaname,
+    avatarUrl: player.avatarfull,
+    profileUrl: player.profileurl,
+  } : null;
+}
+
+export async function getFriendList(steamId: string): Promise<SteamFriend[]> {
+  const apiKey = getSteamApiKey();
+  const userSteamId = validateSteamId(steamId);
   const url = createSteamApiUrl(
     "/ISteamUser/GetFriendList/v1/",
     {
       key: apiKey,
-      steamid: steamId,
+      steamid: userSteamId,
       relationship: "friend",
     }
   );

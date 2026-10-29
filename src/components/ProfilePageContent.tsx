@@ -5,17 +5,15 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import {
   BACKLOG_STATUS_OPTIONS,
-  useBacklogStatuses,
   useGenrePreferences,
-  useHiddenGames,
+  useUserGameData,
 } from "@/lib/backlog";
 import { getGameMetadataBatch } from "@/lib/game-metadata-client";
 import { getStoreLabels } from "@/lib/library";
 import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
 export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
-  const { statuses } = useBacklogStatuses();
-  const { hiddenGames, setHidden } = useHiddenGames();
+  const { getGameData, updateGameData } = useUserGameData();
   const { preferredGenres, toggleGenre } = useGenrePreferences();
   const [metadataById, setMetadataById] = useState<Map<number, SteamGameMetadata | null>>(new Map());
   const [genreState, setGenreState] = useState<"loading" | "ready" | "error">("loading");
@@ -24,9 +22,9 @@ export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
     () => [...new Set([...storeGenres, ...preferredGenres])].sort((left, right) => left.localeCompare(right)),
     [preferredGenres, storeGenres]
   );
-  const tracked = games.filter((game) => statuses[String(game.appid)]);
-  const hiddenLibrary = games.filter((game) => hiddenGames[String(game.appid)]);
-  const completed = games.filter((game) => statuses[String(game.appid)] === "completed").length;
+  const tracked = games.filter((game) => getGameData(game.appid).status);
+  const hiddenLibrary = games.filter((game) => getGameData(game.appid).hidden);
+  const completed = games.filter((game) => getGameData(game.appid).status === "completed").length;
   const completion = tracked.length ? Math.round((completed / tracked.length) * 100) : 0;
   const hours = Math.round(games.reduce((total, game) => total + game.playtime_forever, 0) / 60);
 
@@ -59,7 +57,7 @@ export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
           {[[games.length, "Games owned"], [tracked.length, "Tracked"], [completed, "Completed"], [hours, "Hours played"]].map(([value, label]) => <div key={label} className="bg-[#11120f] p-6"><p className="font-serif text-4xl text-[#e4c66a]">{value}</p><p className="mt-2 text-[9px] uppercase tracking-widest text-white/35">{label}</p></div>)}
         </div>
         <section className="mt-10 rounded-lg border border-white/10 bg-[#11120f] p-6"><div className="flex items-end justify-between"><div><p className="text-sm font-medium">Backlog completion</p><p className="mt-1 text-xs text-white/35">{completed} of {tracked.length} tracked games completed</p></div><p className="font-serif text-4xl text-[#e4c66a]">{completion}%</p></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[#e4c66a]" style={{ width: `${completion}%` }}/></div></section>
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{BACKLOG_STATUS_OPTIONS.map((option) => <div key={option.value} className="rounded-lg border border-white/10 bg-[#11120f] p-4"><p className="font-serif text-2xl">{games.filter((game) => statuses[String(game.appid)] === option.value).length}</p><p className="mt-1 text-[9px] uppercase tracking-widest text-white/35">{option.label}</p></div>)}</section>
+        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{BACKLOG_STATUS_OPTIONS.map((option) => <div key={option.value} className="rounded-lg border border-white/10 bg-[#11120f] p-4"><p className="font-serif text-2xl">{games.filter((game) => getGameData(game.appid).status === option.value).length}</p><p className="mt-1 text-[9px] uppercase tracking-widest text-white/35">{option.label}</p></div>)}</section>
 
         <section className="mt-10 rounded-xl border border-white/10 bg-[#11120f] p-6 sm:p-8">
           <p className="text-[9px] uppercase tracking-[0.3em] text-[#e4c66a]">Profile setup</p>
@@ -78,7 +76,7 @@ export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
 
         <section className="mt-6 rounded-xl border border-white/10 bg-[#11120f] p-6 sm:p-8">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[9px] uppercase tracking-[0.3em] text-[#e4c66a]">Library controls</p><h2 className="mt-3 font-serif text-3xl">Hidden games</h2><p className="mt-2 text-sm text-white/40">Hidden titles stay out of your library views and recommendations until restored.</p></div><p className="font-serif text-3xl text-[#e4c66a]">{hiddenLibrary.length}</p></div>
-          {hiddenLibrary.length ? <div className="mt-6 divide-y divide-white/10 border-y border-white/10">{hiddenLibrary.map((game) => <div key={game.appid} className="flex items-center justify-between gap-4 py-4"><div className="min-w-0"><Link href={`/games/${game.appid}`} className="block truncate text-sm transition hover:text-[#e4c66a]">{game.name}</Link><p className="mt-1 text-xs text-white/30">{game.playtime_forever ? `${(game.playtime_forever / 60).toFixed(1)} hours played` : "Unplayed"}</p></div><button type="button" onClick={() => setHidden(game.appid, false)} className="shrink-0 rounded-md border border-white/15 px-4 py-2 text-[9px] uppercase tracking-wider text-white/55 transition hover:border-[#e4c66a] hover:text-[#e4c66a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95">Restore</button></div>)}</div> : <div className="mt-6 rounded-lg border border-dashed border-white/10 p-6 text-center text-sm text-white/30">No games are hidden.</div>}
+          {hiddenLibrary.length ? <div className="mt-6 divide-y divide-white/10 border-y border-white/10">{hiddenLibrary.map((game) => <div key={game.appid} className="flex items-center justify-between gap-4 py-4"><div className="min-w-0"><Link href={`/games/${game.appid}`} className="block truncate text-sm transition hover:text-[#e4c66a]">{game.name}</Link><p className="mt-1 text-xs text-white/30">{game.playtime_forever ? `${(game.playtime_forever / 60).toFixed(1)} hours played` : "Unplayed"}</p></div><button type="button" onClick={() => updateGameData(game.appid, { hidden: false })} className="shrink-0 rounded-md border border-white/15 px-4 py-2 text-[9px] uppercase tracking-wider text-white/55 transition hover:border-[#e4c66a] hover:text-[#e4c66a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95">Restore</button></div>)}</div> : <div className="mt-6 rounded-lg border border-dashed border-white/10 p-6 text-center text-sm text-white/30">No games are hidden.</div>}
         </section>
       </div>
     </main>

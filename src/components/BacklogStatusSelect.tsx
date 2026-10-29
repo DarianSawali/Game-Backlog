@@ -3,7 +3,7 @@
 import {
   BACKLOG_STATUS_OPTIONS,
   BacklogStatus,
-  useBacklogStatuses,
+  useUserGameData,
 } from "@/lib/backlog";
 
 type Props = {
@@ -15,8 +15,8 @@ export default function BacklogStatusSelect({
   appid,
   className = "",
 }: Props) {
-  const { getStatus, setStatus } = useBacklogStatuses();
-  const status = getStatus(appid);
+  const { getGameData, updateGameData } = useUserGameData();
+  const status = getGameData(appid).status;
 
   return (
     <label className={`block ${className}`}>
@@ -24,10 +24,9 @@ export default function BacklogStatusSelect({
       <select
         value={status ?? ""}
         onChange={(event) =>
-          setStatus(
-            appid,
-            (event.target.value || null) as BacklogStatus | null
-          )
+          updateGameData(appid, {
+            status: (event.target.value || null) as BacklogStatus | null,
+          })
         }
         className="w-full rounded-md border bg-transparent px-2 py-1.5 text-sm"
         aria-label="Backlog status"

@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import GameImage from "@/components/GameImage";
-import { BACKLOG_STATUS_OPTIONS, type BacklogStatus, useBacklogStatuses, useHiddenGames } from "@/lib/backlog";
+import { BACKLOG_STATUS_OPTIONS, type BacklogStatus, useUserGameData } from "@/lib/backlog";
 import { getGameMetadataBatch } from "@/lib/game-metadata-client";
 import { createLibrarySearchIndex } from "@/lib/library";
 import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
@@ -17,27 +17,27 @@ export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [metadataById, setMetadataById] = useState<Map<number, SteamGameMetadata | null>>(new Map());
   const [genreIndexState, setGenreIndexState] = useState<"loading" | "ready" | "error">("loading");
-  const { statuses, setStatus } = useBacklogStatuses();
-  const { hiddenGames, setHidden } = useHiddenGames();
+  const { getGameData, updateGameData } = useUserGameData();
   const deferredSearch = useDeferredValue(search);
   const searchIndex = useMemo(
     () => createLibrarySearchIndex(games, metadataById),
     [games, metadataById]
   );
   const activeGames = useMemo(
-    () => games.filter((game) => !hiddenGames[String(game.appid)]),
-    [games, hiddenGames]
+    () => games.filter((game) => !getGameData(game.appid).hidden),
+    [games, getGameData]
   );
   const visibleGames = useMemo(() => {
     const query = deferredSearch.trim().normalize("NFKD").toLocaleLowerCase();
     return games.filter((game) => {
       const matchesSearch = !query || searchIndex.get(game.appid)?.includes(query);
-      const hidden = hiddenGames[String(game.appid)] === true;
+      const data = getGameData(game.appid);
+      const hidden = data.hidden;
       const matchesVisibility = filter === "hidden" ? hidden : !hidden;
-      const matchesStatus = filter === "all" || filter === "hidden" || statuses[String(game.appid)] === filter;
+      const matchesStatus = filter === "all" || filter === "hidden" || data.status === filter;
       return matchesSearch && matchesVisibility && matchesStatus;
     });
-  }, [deferredSearch, filter, games, hiddenGames, searchIndex, statuses]);
+  }, [deferredSearch, filter, games, getGameData, searchIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +79,7 @@ export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
 
         <div className="mt-4 flex gap-2 overflow-x-auto px-1 py-3">
           <button type="button" aria-pressed={filter === "all"} onClick={() => changeFilter("all")} className={filterClass(filter === "all")}>All {activeGames.length}</button>
-          {BACKLOG_STATUS_OPTIONS.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => changeFilter(option.value)} className={filterClass(filter === option.value)}>{option.label} {activeGames.filter((game) => statuses[String(game.appid)] === option.value).length}</button>)}
+          {BACKLOG_STATUS_OPTIONS.map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => changeFilter(option.value)} className={filterClass(filter === option.value)}>{option.label} {activeGames.filter((game) => getGameData(game.appid).status === option.value).length}</button>)}
           <button type="button" aria-pressed={filter === "hidden"} onClick={() => changeFilter("hidden")} className={filterClass(filter === "hidden")}>Hidden {games.length - activeGames.length}</button>
         </div>
 
@@ -95,8 +95,8 @@ export default function LibraryPageContent({ games }: { games: SteamGame[] }) {
                   </Link>
                   <div className="flex items-stretch gap-2 p-4 pt-3">
                     <a href={`steam://run/${game.appid}`} className="inline-flex min-h-9 items-center justify-center rounded-md bg-[#e4c66a] px-3 py-2 text-[9px] font-bold uppercase leading-none tracking-wider text-black transition duration-200 hover:bg-[#f4dc8e] hover:shadow-[0_0_18px_rgba(228,198,106,.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#11120f] active:scale-95">Play</a>
-                    <select aria-label={`${game.name} classification`} value={statuses[String(game.appid)] ?? ""} onChange={(event) => setStatus(game.appid, event.target.value ? event.target.value as BacklogStatus : null)} className="min-h-9 min-w-0 flex-1 cursor-pointer rounded-md border border-white/15 bg-[#191a17] px-2 py-2 text-xs outline-none transition duration-200 hover:border-white/30 focus:border-[#e4c66a] focus:ring-2 focus:ring-[#e4c66a]/15"><option value="">No status</option>{BACKLOG_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                    <button type="button" onClick={() => setHidden(game.appid, filter !== "hidden")} className="min-h-9 rounded-md border border-white/15 px-3 text-[9px] uppercase tracking-wider text-white/45 transition hover:border-[#e4c66a] hover:text-[#e4c66a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95">{filter === "hidden" ? "Restore" : "Hide"}</button>
+                    <select aria-label={`${game.name} classification`} value={getGameData(game.appid).status ?? ""} onChange={(event) => updateGameData(game.appid, { status: event.target.value ? event.target.value as BacklogStatus : null })} className="min-h-9 min-w-0 flex-1 cursor-pointer rounded-md border border-white/15 bg-[#191a17] px-2 py-2 text-xs outline-none transition duration-200 hover:border-white/30 focus:border-[#e4c66a] focus:ring-2 focus:ring-[#e4c66a]/15"><option value="">No status</option>{BACKLOG_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                    <button type="button" onClick={() => updateGameData(game.appid, { hidden: filter !== "hidden" })} className="min-h-9 rounded-md border border-white/15 px-3 text-[9px] uppercase tracking-wider text-white/45 transition hover:border-[#e4c66a] hover:text-[#e4c66a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e4c66a] active:scale-95">{filter === "hidden" ? "Restore" : "Hide"}</button>
                   </div>
                 </article>
               ))}

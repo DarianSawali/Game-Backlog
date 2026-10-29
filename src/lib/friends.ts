@@ -1,6 +1,7 @@
 import {
   SteamFriend,
-  getRecentlyPlayedGamesForUser,
+  getFriendList,
+  getRecentlyPlayedGames,
 } from "@/lib/steam";
 
 const FRIEND_REQUEST_CONCURRENCY = 5;
@@ -30,7 +31,7 @@ export async function getFriendGameActivity(
     const results = await Promise.allSettled(
       batch.map(async (friend) => ({
         friend,
-        games: await getRecentlyPlayedGamesForUser(friend.steamid),
+        games: await getRecentlyPlayedGames(friend.steamid),
       }))
     );
 
@@ -64,4 +65,15 @@ export async function getFriendGameActivity(
   return [...activityMap.values()].sort(
     (a, b) => b.friendsPlaying - a.friendsPlaying
   );
+}
+
+export async function getFriendActivity(
+  steamId: string
+): Promise<FriendGameActivity[]> {
+  try {
+    return getFriendGameActivity(await getFriendList(steamId));
+  } catch {
+    // Private friend lists and unavailable activity are expected.
+    return [];
+  }
 }
