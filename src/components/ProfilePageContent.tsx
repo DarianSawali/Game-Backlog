@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import { useAppState } from "@/components/auth/AppStateProvider";
 import {
   BACKLOG_STATUS_OPTIONS,
   useGenrePreferences,
@@ -13,6 +14,10 @@ import { getStoreLabels } from "@/lib/library";
 import type { SteamGame, SteamGameMetadata } from "@/lib/steam";
 
 export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
+  const { state } = useAppState();
+  const displayName = state.auth.status === "authenticated"
+    ? state.auth.user.displayName
+    : "Player";
   const { getGameData, updateGameData } = useUserGameData();
   const { preferredGenres, toggleGenre } = useGenrePreferences();
   const [metadataById, setMetadataById] = useState<Map<number, SteamGameMetadata | null>>(new Map());
@@ -52,7 +57,7 @@ export default function ProfilePageContent({ games }: { games: SteamGame[] }) {
       <div className="mx-auto max-w-[1600px]"><AppHeader active="profile"/></div>
       <div className="mx-auto max-w-6xl py-14">
         <p className="text-[9px] uppercase tracking-[0.35em] text-[#e4c66a]">Profile</p>
-        <h1 className="mt-4 font-serif text-5xl sm:text-6xl">Darian&apos;s Chronicle</h1>
+        <h1 className="mt-4 font-serif text-5xl sm:text-6xl">{displayName}&apos;s Chronicle</h1>
         <div className="mt-10 grid grid-cols-2 gap-px bg-[#d8c79a]/15 lg:grid-cols-4">
           {[[games.length, "Games owned"], [tracked.length, "Tracked"], [completed, "Completed"], [hours, "Hours played"]].map(([value, label]) => <div key={label} className="bg-[#11120f] p-6"><p className="font-serif text-4xl text-[#e4c66a]">{value}</p><p className="mt-2 text-[9px] uppercase tracking-widest text-white/35">{label}</p></div>)}
         </div>

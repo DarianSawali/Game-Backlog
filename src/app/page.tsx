@@ -1,4 +1,6 @@
 import GameMenuPreview from "@/components/GameMenuPreview";
+import LibraryStateReporter from "@/components/auth/LibraryStateReporter";
+import { getLibraryAccessState } from "@/lib/auth-state";
 import { getOwnedGames, getRecentlyPlayedGames } from "@/lib/steam";
 
 export default async function Home() {
@@ -15,11 +17,14 @@ export default async function Home() {
     : [];
 
   return (
-    <GameMenuPreview
-      games={games}
-      recentGames={recentResult.status === "fulfilled" ? recentResult.value : []}
-      hasError={!libraryResult || libraryResult.status !== "available"}
-      isMainPage
-    />
+    <>
+      <LibraryStateReporter library={getLibraryAccessState(libraryResult)} />
+      <GameMenuPreview
+        games={games}
+        recentGames={recentResult.status === "fulfilled" ? recentResult.value : []}
+        hasError={!libraryResult || libraryResult.status === "failed"}
+        isMainPage
+      />
+    </>
   );
 }

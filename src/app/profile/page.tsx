@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import ProfilePageContent from "@/components/ProfilePageContent";
+import LibraryStateReporter from "@/components/auth/LibraryStateReporter";
+import { getLibraryAccessState, type LibraryAccessState } from "@/lib/auth-state";
 import { getOwnedGames, type SteamGame } from "@/lib/steam";
 
 export const metadata: Metadata = { title: "Profile | Game Backlog" };
@@ -7,11 +9,13 @@ export const metadata: Metadata = { title: "Profile | Game Backlog" };
 export default async function ProfilePage() {
   const steamId = process.env.STEAM_ID;
   let games: SteamGame[] = [];
+  let library: LibraryAccessState = getLibraryAccessState(null);
   try {
     if (steamId) {
       const result = await getOwnedGames(steamId);
+      library = getLibraryAccessState(result);
       if (result.status === "available") games = result.games;
     }
   } catch {}
-  return <ProfilePageContent games={games}/>;
+  return <><LibraryStateReporter library={library}/><ProfilePageContent games={games}/></>;
 }

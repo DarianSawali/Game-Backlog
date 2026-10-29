@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import GameDetailsContent from "@/components/GameDetailsContent";
+import LibraryStateReporter from "@/components/auth/LibraryStateReporter";
+import { getLibraryAccessState } from "@/lib/auth-state";
 import { getGameMetadata, getOwnedGames } from "@/lib/steam";
 
 export default async function GameDetailsPage({ params }: { params: Promise<{ appid: string }> }) {
@@ -18,5 +20,9 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ ap
   const metadata = metadataResult.status === "fulfilled" ? metadataResult.value : null;
   if (!game && !metadata) notFound();
 
-  return <GameDetailsContent game={game ?? { appid, name: metadata?.name ?? "Unknown game", playtime_forever: 0, img_icon_url: "" }} metadata={metadata}/>;
+  const library = getLibraryAccessState(
+    gamesResult.status === "fulfilled" ? gamesResult.value : null
+  );
+
+  return <><LibraryStateReporter library={library}/><GameDetailsContent game={game ?? { appid, name: metadata?.name ?? "Unknown game", playtime_forever: 0, img_icon_url: "" }} metadata={metadata}/></>;
 }

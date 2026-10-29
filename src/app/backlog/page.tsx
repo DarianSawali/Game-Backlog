@@ -1,15 +1,19 @@
 import Link from "next/link";
 import BacklogWorkspace from "@/components/BacklogWorkspace";
+import LibraryStateReporter from "@/components/auth/LibraryStateReporter";
+import { getLibraryAccessState, type LibraryAccessState } from "@/lib/auth-state";
 import { getOwnedGames, SteamGame } from "@/lib/steam";
 
 export default async function BacklogPage() {
   const steamId = process.env.STEAM_ID;
   let games: SteamGame[] = [];
   let error = false;
+  let library: LibraryAccessState = getLibraryAccessState(null);
 
   try {
     if (!steamId) throw new Error("STEAM_ID is missing");
     const result = await getOwnedGames(steamId);
+    library = getLibraryAccessState(result);
     if (result.status !== "available") throw new Error("Steam library unavailable");
     games = result.games;
   } catch {
@@ -17,7 +21,7 @@ export default async function BacklogPage() {
   }
 
   return (
-    <main className="min-h-screen p-8">
+    <><LibraryStateReporter library={library}/><main className="min-h-screen p-8">
       <nav className="mb-8 flex items-center justify-between gap-4">
         <Link href="/" className="font-semibold">
           Game Backlog
@@ -40,6 +44,6 @@ export default async function BacklogPage() {
       ) : (
         <BacklogWorkspace games={games} />
       )}
-    </main>
+    </main></>
   );
 }
